@@ -1,0 +1,164 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+model User {
+  id            String    @id @default(uuid())
+  email         String?   @unique
+  username      String
+  password      String
+  userType      UserType
+  profileImage  String?
+  createdAt     DateTime  @default(now())
+  updatedAt     DateTime  @updatedAt
+
+  // 관계
+  parentProfile ParentProfile?
+  childProfile  ChildProfile?
+  notifications Notification[]
+}
+
+enum UserType {
+  PARENT
+  CHILD
+}
+
+model ParentProfile {
+  id        String   @id @default(uuid())
+  userId    String   @unique
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  
+  // 관계
+  children  ChildParentConnection[]
+  promises  PromiseTask[]  
+  rewards   Reward[]
+}
+
+model ChildProfile {
+  id        String   @id @default(uuid())
+  userId    String   @unique
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  birthDate DateTime?
+  characterStage Int  @default(1)
+  
+  // 관계
+  parents   ChildParentConnection[]
+  promises  PromiseAssignment[]
+  stickers  Sticker[]
+}
+
+model ChildParentConnection {
+  id        String   @id @default(uuid())
+  childId   String
+  parentId  String
+  createdAt DateTime @default(now())
+  
+  child     ChildProfile @relation(fields: [childId], references: [id], onDelete: Cascade)
+  parent    ParentProfile @relation(fields: [parentId], references: [id], onDelete: Cascade)
+  
+  @@unique([childId, parentId])
+}
+
+model PromiseTask { 
+  id          String   @id @default(uuid())
+  title       String
+  description String?
+  repeatType  RepeatType @default(ONCE)
+  startDate   DateTime
+  endDate     DateTime?
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+  createdBy   String
+  
+  // 관계
+  parent      ParentProfile @relation(fields: [createdBy], references: [id], onDelete: Cascade)
+  assignments PromiseAssignment[]
+}
+
+enum RepeatType {
+  ONCE
+  DAILY
+  WEEKLY
+  MONTHLY
+}
+
+model PromiseAssignment {
+  id          String   @id @default(uuid())
+  promiseId   String
+  childId     String
+  dueDate     DateTime
+  status      PromiseStatus @default(PENDING)
+  verificationImage String?
+  verificationTime  DateTime?
+  completedAt DateTime?
+  rejectionReason String?
+  
+  // 관계
+  promise     PromiseTask  @relation(fields: [promiseId], references: [id], onDelete: Cascade) 
+  child       ChildProfile @relation(fields: [childId], references: [id], onDelete: Cascade)
+}
+
+enum PromiseStatus {
+  PENDING
+  SUBMITTED
+  APPROVED
+  REJECTED
+  EXPIRED
+}
+
+model Sticker {
+  id          String   @id @default(uuid())
+  childId     String
+  rewardId    String?
+  title       String
+  description String?
+  imageUrl    String?
+  createdAt   DateTime @default(now())
+  
+  // 관계
+  child       ChildProfile @relation(fields: [childId], references: [id], onDelete: Cascade)
+  reward      Reward?    @relation(fields: [rewardId], references: [id])
+}
+
+model Reward {
+  id          String   @id @default(uuid())
+  parentId    String
+  title       String
+  description String?
+  requiredStickers Int
+  isActive    Boolean  @default(true)
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+  
+  // 관계
+  parent      ParentProfile @relation(fields: [parentId], references: [id], onDelete: Cascade)
+  stickers    Sticker[]
+}
+
+model Notification {
+  id          String   @id @default(uuid())
+  userId      String
+  title       String
+  content     String
+  isRead      Boolean  @default(false)
+  notificationType NotificationType
+  relatedId   String?   // 관련 PromiseTask, Reward 등의 ID
+  createdAt   DateTime @default(now())
+  
+  // 관계
+  user        User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+}
+
+enum NotificationType {
+  PROMISE_CREATED
+  PROMISE_VERIFIED
+  PROMISE_APPROVED
+  PROMISE_REJECTED
+  REWARD_EARNED
+  SYSTEM
+}
