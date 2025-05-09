@@ -32,6 +32,8 @@ model ParentProfile {
   id        String   @id @default(uuid())
   userId    String   @unique
   user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  connectionCode       String?                // 6자리 랜덤 숫자 연결 코드
+  connectionCodeExpires DateTime?             // 연결 코드 만료 시간
   
   // 관계
   children  ChildParentConnection[]

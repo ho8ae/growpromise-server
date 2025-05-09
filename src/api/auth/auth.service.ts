@@ -34,6 +34,14 @@ export const generateToken = (userId: string, userType: string): string => {
 };
 
 /**
+ * 6자리 랜덤 숫자 코드 생성
+ */
+export const generateRandomCode = (): string => {
+  // 6자리 랜덤 숫자 생성 (100000~999999)
+  return Math.floor(100000 + Math.random() * 900000).toString();
+};
+
+/**
  * 부모 계정 생성
  */
 export const createParentAccount = async (
@@ -65,10 +73,26 @@ export const createParentAccount = async (
       }
     });
 
-    // 부모 프로필 생성
+    // 연결 코드 생성 (중복 확인)
+    let connectionCode = generateRandomCode();
+    let existingCode = await prisma.parentProfile.findFirst({
+      where: { connectionCode }
+    });
+    
+    // 중복된 코드가 있으면 다시 생성
+    while (existingCode) {
+      connectionCode = generateRandomCode();
+      existingCode = await prisma.parentProfile.findFirst({
+        where: { connectionCode }
+      });
+    }
+
+    // 부모 프로필 생성 (연결 코드 포함)
     const parentProfile = await prisma.parentProfile.create({
       data: {
-        userId: user.id
+        userId: user.id,
+        connectionCode, // 연결 코드 저장
+        connectionCodeExpires: new Date(Date.now() + 5 * 60 * 1000) // 5분 후 만료
       }
     });
 
@@ -122,7 +146,10 @@ export const createChildAccount = async (
     if (parentCode) {
       const parentProfile = await prisma.parentProfile.findFirst({
         where: {
-          id: parentCode
+          connectionCode: parentCode,
+          connectionCodeExpires: {
+            gt: new Date() // 만료되지 않은 코드만
+          }
         }
       });
 
@@ -223,8 +250,24 @@ export const generateParentConnectionCode = async (parentId: string) => {
     throw new ApiError('부모 프로필을 찾을 수 없습니다.', 404);
   }
 
+  // 새로운 연결 코드 생성
+  const connectionCode = generateRandomCode();
+  
+  // 만료 시간 설정 (5분)
+  const connectionCodeExpires = new Date(Date.now() + 5 * 60 * 1000);
+  
+  // 프로필 업데이트
+  await prisma.parentProfile.update({
+    where: { id: parentProfile.id },
+    data: {
+      connectionCode,
+      connectionCodeExpires
+    }
+  });
+
   return {
-    code: parentProfile.id
+    code: connectionCode,
+    expiresAt: connectionCodeExpires
   };
 };
 
@@ -245,15 +288,18 @@ export const connectChildToParent = async (childId: string, parentCode: string) 
     throw new ApiError('자녀 프로필을 찾을 수 없습니다.', 404);
   }
 
-  // 부모 프로필 조회
-  const parentProfile = await prisma.parentProfile.findUnique({
+  // 부모 프로필 조회 (유효한 연결 코드로)
+  const parentProfile = await prisma.parentProfile.findFirst({
     where: {
-      id: parentCode
+      connectionCode: parentCode,
+      connectionCodeExpires: {
+        gt: new Date() // 만료되지 않은 코드만
+      }
     }
   });
 
   if (!parentProfile) {
-    throw new ApiError('유효하지 않은 부모 연결 코드입니다.', 400);
+    throw new ApiError('유효하지 않거나 만료된 부모 연결 코드입니다.', 400);
   }
 
   // 이미 연결되어 있는지 확인
