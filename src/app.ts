@@ -1,6 +1,8 @@
 import express, { Application } from 'express';
 import cors from 'cors';
 import path from 'path';
+import helmet from 'helmet';
+import morgan from 'morgan';
 import { PrismaClient } from '@prisma/client';
 
 // 라우터 임포트
@@ -22,8 +24,66 @@ export const prisma = new PrismaClient({
 // Express 앱 생성
 const app: Application = express();
 
+// Swagger 설정
+const swaggerUi = require('swagger-ui-express');
+const swaggerJsdoc = require('swagger-jsdoc');
+
+const swaggerOptions = {
+  definition: {
+    openapi: '3.0.0',
+    info: {
+      title: '쑥쑥약속 API',
+      version: '1.0.0',
+      description: '부모와 아이를 위한 약속 관리 앱 API',
+      contact: {
+        name: 'KidsPlan Team'
+      }
+    },
+    servers: [
+      {
+        url: process.env.API_URL || 'http://localhost:5000',
+        description: '개발 서버'
+      }
+    ],
+    components: {
+      securitySchemes: {
+        bearerAuth: {
+          type: 'http',
+          scheme: 'bearer',
+          bearerFormat: 'JWT'
+        }
+      }
+    },
+    security: [
+      {
+        bearerAuth: []
+      }
+    ]
+  },
+  apis: [
+    path.resolve(__dirname, 'docs/*.js'),
+    path.resolve(__dirname, 'api/**/*.routes.ts'),
+    path.resolve(__dirname, 'api/**/*.controller.ts')
+  ]
+};
+
+const swaggerSpec = swaggerJsdoc(swaggerOptions);
+app.use('/api-docs', swaggerUi.serve, swaggerUi.setup(swaggerSpec, {
+  explorer: true,
+  customCss: '.swagger-ui .topbar { display: none }',
+  customSiteTitle: '쑥쑥약속 API 문서'
+}));
+
+// API 스펙 JSON으로 가져오기
+app.get('/api-docs.json', (req, res) => {
+  res.setHeader('Content-Type', 'application/json');
+  res.send(swaggerSpec);
+});
+
 // 기본 미들웨어 설정
 app.use(cors());
+app.use(helmet());
+app.use(morgan('dev'));
 app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
 
@@ -44,7 +104,8 @@ app.get('/', (req, res) => {
   res.status(200).json({ 
     message: '쑥쑥약속 API 서버에 연결되었습니다.',
     version: '1.0.0',
-    status: 'running'
+    status: 'running',
+    docs: '/api-docs'
   });
 });
 

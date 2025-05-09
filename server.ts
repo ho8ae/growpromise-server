@@ -23,10 +23,10 @@ for (const dir of dirs) {
   }
 }
 
-const PORT = process.env.PORT || 3000;
+const PORT = parseInt(process.env.PORT || '3000',10);
 
 // 서버 시작
-app.listen(PORT, () => {
+app.listen(PORT,'0.0.0.0', () => {
   console.log(`서버가 포트 ${PORT}에서 실행 중입니다.`);
   console.log(`환경: ${process.env.NODE_ENV || 'development'}`);
 });
