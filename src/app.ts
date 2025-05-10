@@ -41,7 +41,7 @@ const swaggerOptions = {
     },
     servers: [
       {
-        url: process.env.API_URL || 'http://localhost:5000',
+        url: process.env.API_URL || 'http://localhost:3000',
         description: '개발 서버'
       }
     ],
@@ -81,7 +81,11 @@ app.get('/api-docs.json', (req, res) => {
 });
 
 // 기본 미들웨어 설정
-app.use(cors());
+app.use(cors({
+  origin: '*', // 개발 중에는 '*'로 설정, 프로덕션에서는 특정 도메인으로 제한
+  methods: ['GET', 'POST', 'PUT', 'DELETE', 'PATCH'],
+  allowedHeaders: ['Content-Type', 'Authorization']
+}));
 app.use(helmet());
 app.use(morgan('dev'));
 app.use(express.json());

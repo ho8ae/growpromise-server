@@ -14,6 +14,9 @@ router.use(authenticate);
 router.post('/', requireParent, uploadStickerImage, validate(createStickerSchema), stickerController.createSticker);
 router.get('/child/:childId', requireParent, stickerController.getChildStickersByParent);
 router.delete('/:id', requireParent, stickerController.deleteSticker);
+// 부모가 특정 자녀의 스티커 개수 조회
+router.get('/child/:childId/count', authenticate, stickerController.getChildStickerCount);
+
 
 // 자녀 라우트
 router.get('/child', stickerController.getChildStickers);

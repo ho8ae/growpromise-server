@@ -21,6 +21,8 @@ router.get('/children', requireParent, promiseController.getParentChildren);
 router.get('/', requireParent, promiseController.getParentPromises);
 router.get('/verifications/pending', requireParent, promiseController.getPendingVerifications);
 router.post('/verify/respond/:id', requireParent, validate(responseVerificationSchema), promiseController.respondToVerification);
+// 부모가 특정 자녀의 약속 과제 목록 조회
+router.get('/assignments/:childId', authenticate, promiseController.getPromiseAssignmentsByChild);
 
 // 자녀 라우트
 router.get('/child', promiseController.getChildPromises);

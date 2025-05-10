@@ -140,3 +140,26 @@ export const getChildStickerStats = asyncHandler(async (req: Request, res: Respo
     data: stats
   });
 });
+
+/**
+ * 특정 자녀의 스티커 개수 조회
+ * @route GET /api/stickers/child/:childId/count
+ */
+export const getChildStickerCount = asyncHandler(async (req: Request, res: Response) => {
+  if (!req.user) {
+    return res.status(401).json({
+      success: false,
+      message: '인증이 필요합니다.'
+    });
+  }
+  
+  const { childId } = req.params;
+  
+  const stickerStats = await stickerService.getChildStickerCount(childId, req.user.id);
+  
+  res.status(200).json({
+    success: true,
+    data: stickerStats
+  });
+});
+

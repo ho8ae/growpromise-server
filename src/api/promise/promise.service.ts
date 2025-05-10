@@ -799,3 +799,53 @@ export const getChildPromiseStats = async (userId: string) => {
     stickerCount
   };
 };
+
+/**
+ * 부모가 특정 자녀의 약속 과제 목록 조회
+ */
+export const getPromiseAssignmentsByChild = async (childId: string, parentId: string) => {
+  // 부모-자녀 관계 확인
+  const parentProfile = await prisma.parentProfile.findFirst({
+    where: {
+      user: {
+        id: parentId
+      }
+    }
+  });
+
+  if (!parentProfile) {
+    throw new ApiError('부모 프로필을 찾을 수 없습니다.', 404);
+  }
+
+  // 연결 확인
+  const connection = await prisma.childParentConnection.findFirst({
+    where: {
+      parentId: parentProfile.id,
+      childId
+    }
+  });
+
+  if (!connection) {
+    throw new ApiError('이 자녀에 대한 접근 권한이 없습니다.', 403);
+  }
+
+  // 약속 과제 목록 조회
+  return await prisma.promiseAssignment.findMany({
+    where: {
+      childId
+    },
+    include: {
+      promise: true,
+      child: {
+        include: {
+          user: {
+            select: {
+              username: true,
+              profileImage: true
+            }
+          }
+        }
+      }
+    }
+  });
+};

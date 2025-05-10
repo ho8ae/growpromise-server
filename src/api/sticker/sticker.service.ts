@@ -303,3 +303,56 @@ export const getChildStickerStats = async (userId: string) => {
     rewardStats
   };
 };
+
+
+/**
+ * 특정 자녀의 스티커 개수 조회
+ */
+export const getChildStickerCount = async (childId: string, parentId: string) => {
+  // 부모-자녀 관계 확인
+  const parentProfile = await prisma.parentProfile.findFirst({
+    where: {
+      user: {
+        id: parentId
+      }
+    }
+  });
+
+  if (!parentProfile) {
+    throw new ApiError('부모 프로필을 찾을 수 없습니다.', 404);
+  }
+
+  // 연결 확인
+  const connection = await prisma.childParentConnection.findFirst({
+    where: {
+      parentId: parentProfile.id,
+      childId
+    }
+  });
+
+  if (!connection) {
+    throw new ApiError('이 자녀에 대한 접근 권한이 없습니다.', 403);
+  }
+
+  // 전체 스티커 개수
+  const totalStickers = await prisma.sticker.count({
+    where: {
+      childId
+    }
+  });
+
+  // 사용된 스티커 개수 (보상에 사용됨)
+  const usedStickers = await prisma.sticker.count({
+    where: {
+      childId,
+      rewardId: { not: null }
+    }
+  });
+
+  return {
+    totalStickers,
+    usedStickers,
+    availableStickers: totalStickers - usedStickers
+  };
+};
+

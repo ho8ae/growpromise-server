@@ -272,3 +272,25 @@ export const getChildPromiseStats = asyncHandler(async (req: Request, res: Respo
     data: result
   });
 });
+
+/**
+ * 부모가 특정 자녀의 약속 과제 목록 조회
+ * @route GET /api/promises/assignments/:childId
+ */
+export const getPromiseAssignmentsByChild = asyncHandler(async (req: Request, res: Response) => {
+  if (!req.user) {
+    return res.status(401).json({
+      success: false,
+      message: '인증이 필요합니다.'
+    });
+  }
+  
+  const { childId } = req.params;
+  
+  const assignments = await promiseService.getPromiseAssignmentsByChild(childId, req.user.id);
+  
+  res.status(200).json({
+    success: true,
+    data: assignments
+  });
+});

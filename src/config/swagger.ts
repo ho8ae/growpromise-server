@@ -23,7 +23,7 @@ export const setupSwagger = (app: Express): void => {
       },
       servers: [
         {
-          url: process.env.API_URL || 'http://localhost:5000/api',
+          url: process.env.API_URL || 'http://localhost:3000/api',
           description: '개발 서버'
         }
       ],
