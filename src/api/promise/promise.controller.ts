@@ -1,3 +1,4 @@
+// src/api/promise/promise.controller.ts
 import { Request, Response } from 'express';
 import { asyncHandler } from '../../middleware/error.middleware';
 import * as promiseService from './promise.service';
@@ -180,7 +181,7 @@ export const deletePromise = asyncHandler(async (req: Request, res: Response) =>
  * 약속 인증 제출
  * @route POST /api/promises/verify
  */
-export const submitVerification = asyncHandler(async (req: Request, res: Response) => {
+export const submitVerification = asyncHandler(async (req: any, res: any) => {
   if (!req.user) {
     return res.status(401).json({
       success: false,
@@ -190,17 +191,18 @@ export const submitVerification = asyncHandler(async (req: Request, res: Respons
   
   const { promiseAssignmentId } = req.body;
   
-  // 이미지 파일 경로 (업로드 미들웨어에서 설정)
-  const imagePath = req.file?.path || '';
+  // S3에 업로드된 이미지 URL 사용
+  const imageUrl = req.fileUrl;
   
-  if (!imagePath) {
+  if (!imageUrl) {
     return res.status(400).json({
       success: false,
       message: '인증 이미지가 필요합니다.'
     });
   }
   
-  const result = await promiseService.submitVerification(promiseAssignmentId, req.user.id, imagePath);
+  // 서비스 호출 시 이미지 URL 전달
+  const result = await promiseService.submitVerification(promiseAssignmentId, req.user.id, imageUrl);
   
   res.status(200).json({
     success: true,

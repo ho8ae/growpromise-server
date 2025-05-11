@@ -1,4 +1,5 @@
-import express, { Application } from 'express';
+// src/app.ts
+import express, { Application, Request, Response, NextFunction } from 'express';
 import cors from 'cors';
 import path from 'path';
 import helmet from 'helmet';
@@ -12,6 +13,7 @@ import promiseRoutes from './api/promise/promise.routes';
 import rewardRoutes from './api/reward/reward.routes';
 import stickerRoutes from './api/sticker/sticker.routes';
 import notificationRoutes from './api/notification/notification.routes';
+import plantRoutes from './api/plant/plant.routes';
 
 // 미들웨어 임포트
 import { errorHandler } from './middleware/error.middleware';
@@ -25,8 +27,8 @@ export const prisma = new PrismaClient({
 const app: Application = express();
 
 // Swagger 설정
-const swaggerUi = require('swagger-ui-express');
-const swaggerJsdoc = require('swagger-jsdoc');
+import swaggerUi from 'swagger-ui-express';
+import swaggerJsdoc from 'swagger-jsdoc';
 
 const swaggerOptions = {
   definition: {
@@ -75,7 +77,7 @@ app.use('/api-docs', swaggerUi.serve, swaggerUi.setup(swaggerSpec, {
 }));
 
 // API 스펙 JSON으로 가져오기
-app.get('/api-docs.json', (req, res) => {
+app.get('/api-docs.json', (req: Request, res: Response) => {
   res.setHeader('Content-Type', 'application/json');
   res.send(swaggerSpec);
 });
@@ -102,9 +104,10 @@ app.use('/api/promises', promiseRoutes);
 app.use('/api/rewards', rewardRoutes);
 app.use('/api/stickers', stickerRoutes);
 app.use('/api/notifications', notificationRoutes);
+app.use('/api/plants', plantRoutes);
 
 // 기본 라우트
-app.get('/', (req, res) => {
+app.get('/', (req: Request, res: Response) => {
   res.status(200).json({ 
     message: '쑥쑥약속 API 서버에 연결되었습니다.',
     version: '1.0.0',
@@ -114,7 +117,7 @@ app.get('/', (req, res) => {
 });
 
 // 존재하지 않는 라우트에 대한 핸들러
-app.use((req, res, next) => {
+app.use((req: Request, res: Response, next: NextFunction) => {
   res.status(404).json({
     message: '요청한 리소스를 찾을 수 없습니다.',
     path: req.path

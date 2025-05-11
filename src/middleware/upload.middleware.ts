@@ -1,90 +1,111 @@
+// src/middleware/upload.middleware.ts
 import multer from 'multer';
-import path from 'path';
-import fs from 'fs';
-import { Request } from 'express';
-import { ApiError } from './error.middleware';
+import { uploadToS3 } from '../config/s3.config';
 
-// 업로드 디렉토리 생성
-const uploadDir = process.env.UPLOAD_DIR || 'uploads';
-const promiseImageDir = path.join(uploadDir, 'promises');
-const profileImageDir = path.join(uploadDir, 'profiles');
-const stickerImageDir = path.join(uploadDir, 'stickers');
+// 메모리 스토리지 설정 (파일을 메모리에 버퍼로 저장)
+const storage = multer.memoryStorage();
 
-// 디렉토리 생성 함수
-const createDirIfNotExists = (dir: string) => {
-  if (!fs.existsSync(dir)) {
-    fs.mkdirSync(dir, { recursive: true });
-  }
-};
-
-// 각 디렉토리 생성
-createDirIfNotExists(promiseImageDir);
-createDirIfNotExists(profileImageDir);
-createDirIfNotExists(stickerImageDir);
-
-// 파일 필터 - 이미지 파일만 허용
-const fileFilter = (req: Request, file: Express.Multer.File, cb: multer.FileFilterCallback) => {
-  const allowedTypes = ['image/jpeg', 'image/png', 'image/gif'];
-  
-  if (allowedTypes.includes(file.mimetype)) {
+// 이미지 파일만 허용하도록 필터 설정
+const fileFilter = (req: any, file: Express.Multer.File, cb: multer.FileFilterCallback) => {
+  if (file.mimetype.startsWith('image/')) {
     cb(null, true);
   } else {
-    cb(new ApiError('지원되지 않는 파일 형식입니다. JPEG, PNG, GIF만 허용됩니다.', 400) as any);
+    cb(new Error('이미지 파일만 업로드할 수 있습니다.'));
   }
 };
 
-// 스토리지 설정 - 약속 인증 이미지
-const promiseStorage = multer.diskStorage({
-  destination: (req, file, cb) => {
-    cb(null, promiseImageDir);
+// multer 설정
+const upload = multer({
+  storage,
+  fileFilter,
+  limits: {
+    fileSize: 5 * 1024 * 1024, // 최대 5MB
   },
-  filename: (req, file, cb) => {
-    const uniqueSuffix = `${Date.now()}-${Math.round(Math.random() * 1e9)}`;
-    const ext = path.extname(file.originalname);
-    cb(null, `promise-${uniqueSuffix}${ext}`);
-  }
 });
 
-// 스토리지 설정 - 프로필 이미지
-const profileStorage = multer.diskStorage({
-  destination: (req, file, cb) => {
-    cb(null, profileImageDir);
+// 약속 인증 이미지 업로드 미들웨어
+export const uploadPromiseImage = [
+  // multer로 'verificationImage' 필드의 파일 처리
+  upload.single('verificationImage'),
+  
+  // S3에 업로드하는 미들웨어
+  async (req: any, res: any, next: any) => {
+    try {
+      const file = req.file;
+      
+      if (!file) {
+        return next(); // 파일이 없으면 다음 미들웨어로 넘어감
+      }
+
+      // S3에 업로드
+      const imageUrl = await uploadToS3(
+        file.buffer,
+        file.mimetype,
+        'promise-verifications'
+      );
+
+      // req 객체에 S3 URL 저장
+      req.fileUrl = imageUrl;
+      
+      next();
+    } catch (error) {
+      next(error);
+    }
   },
-  filename: (req, file, cb) => {
-    const uniqueSuffix = `${Date.now()}-${Math.round(Math.random() * 1e9)}`;
-    const ext = path.extname(file.originalname);
-    cb(null, `profile-${uniqueSuffix}${ext}`);
-  }
-});
+];
 
-// 스토리지 설정 - 스티커 이미지
-const stickerStorage = multer.diskStorage({
-  destination: (req, file, cb) => {
-    cb(null, stickerImageDir);
+// 프로필 이미지 업로드 미들웨어
+export const uploadProfileImage = [
+  upload.single('profileImage'),
+  async (req: any, res: any, next: any) => {
+    try {
+      const file = req.file;
+      
+      if (!file) {
+        return next();
+      }
+
+      // S3에 업로드
+      const imageUrl = await uploadToS3(
+        file.buffer,
+        file.mimetype,
+        'profile-images'
+      );
+
+      // req 객체에 S3 URL 저장
+      req.fileUrl = imageUrl;
+      
+      next();
+    } catch (error) {
+      next(error);
+    }
   },
-  filename: (req, file, cb) => {
-    const uniqueSuffix = `${Date.now()}-${Math.round(Math.random() * 1e9)}`;
-    const ext = path.extname(file.originalname);
-    cb(null, `sticker-${uniqueSuffix}${ext}`);
-  }
-});
+];
 
-// 업로드 미들웨어 생성
-export const uploadPromiseImage = multer({
-  storage: promiseStorage,
-  limits: { fileSize: 5 * 1024 * 1024 }, // 5MB 제한
-  fileFilter
-}).single('image');
+// 스티커 이미지 업로드 미들웨어
+export const uploadStickerImage = [
+  upload.single('stickerImage'),
+  async (req: any, res: any, next: any) => {
+    try {
+      const file = req.file;
+      
+      if (!file) {
+        return next();
+      }
 
-export const uploadProfileImage = multer({
-  storage: profileStorage,
-  limits: { fileSize: 2 * 1024 * 1024 }, // 2MB 제한
-  fileFilter
-}).single('image');
+      // S3에 업로드
+      const imageUrl = await uploadToS3(
+        file.buffer,
+        file.mimetype,
+        'sticker-images'
+      );
 
-export const uploadStickerImage = multer({
-  storage: stickerStorage,
-  limits: { fileSize: 1 * 1024 * 1024 }, // 1MB 제한
-  fileFilter
-}).single('image');
-
+      // req 객체에 S3 URL 저장
+      req.fileUrl = imageUrl;
+      
+      next();
+    } catch (error) {
+      next(error);
+    }
+  },
+];
