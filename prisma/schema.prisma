@@ -218,3 +218,14 @@ model WateringLog {
   // 관계
   plant       Plant    @relation(fields: [plantId], references: [id], onDelete: Cascade)
 }
+
+// 스티커 템플릿 모델
+model StickerTemplate {
+  id           String   @id @default(uuid())
+  name         String   // 템플릿 이름 (예: "금색 별", "웃는 얼굴")
+  description  String?  // 템플릿 설명
+  category     String   // 카테고리 (예: "별", "표정", "동물", "식물" 등)
+  imageUrl     String   // 스티커 이미지 URL (S3에 미리 업로드된 이미지)
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+}
