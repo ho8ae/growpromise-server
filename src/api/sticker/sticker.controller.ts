@@ -1,31 +1,56 @@
-import { Request, Response } from 'express';
+// src/api/sticker/sticker.controller.ts
+
 import { asyncHandler } from '../../middleware/error.middleware';
 import * as stickerService from './sticker.service';
 
 /**
- * 스티커 생성 (부모 전용)
+ * 모든 스티커 템플릿 조회
+ * @route GET /api/stickers/templates
+ */
+export const getAllStickerTemplates = asyncHandler(async (req: any, res: any) => {
+  const templates = await stickerService.getAllStickerTemplates();
+  
+  res.status(200).json({
+    success: true,
+    data: templates
+  });
+});
+
+/**
+ * 카테고리별 스티커 템플릿 조회
+ * @route GET /api/stickers/templates/category/:category
+ */
+export const getStickerTemplatesByCategory = asyncHandler(async (req: any, res: any) => {
+  const { category } = req.params;
+  
+  const templates = await stickerService.getStickerTemplatesByCategory(category);
+  
+  res.status(200).json({
+    success: true,
+    data: templates
+  });
+});
+
+/**
+ * 스티커 생성 (부모용)
  * @route POST /api/stickers
  */
-export const createSticker = asyncHandler(async (req: Request, res: Response) => {
+export const createSticker = asyncHandler(async (req: any, res: any) => {
   if (!req.user) {
     return res.status(401).json({
       success: false,
       message: '인증이 필요합니다.'
     });
   }
-  
-  const { childId, title, description, rewardId } = req.body;
-  
-  // 이미지 파일 경로 (업로드 미들웨어에서 설정)
-  const imageUrl = req.file?.path || null;
+
+  const { title, description, childId, templateId } = req.body;
   
   const result = await stickerService.createSticker(
     req.user.id,
     childId,
     title,
-    description || null,
-    imageUrl,
-    rewardId || null
+    templateId,
+    description
   );
   
   res.status(201).json({
@@ -36,30 +61,10 @@ export const createSticker = asyncHandler(async (req: Request, res: Response) =>
 });
 
 /**
- * 자녀의 스티커 목록 조회 (자녀 전용)
- * @route GET /api/stickers/child
- */
-export const getChildStickers = asyncHandler(async (req: Request, res: Response) => {
-  if (!req.user) {
-    return res.status(401).json({
-      success: false,
-      message: '인증이 필요합니다.'
-    });
-  }
-  
-  const stickers = await stickerService.getChildStickers(req.user.id, false);
-  
-  res.status(200).json({
-    success: true,
-    data: stickers
-  });
-});
-
-/**
- * 특정 자녀의 스티커 목록 조회 (부모 전용)
+ * 자녀의 스티커 목록 조회 (부모용)
  * @route GET /api/stickers/child/:childId
  */
-export const getChildStickersByParent = asyncHandler(async (req: Request, res: Response) => {
+export const getChildStickersByParent = asyncHandler(async (req: any, res: any) => {
   if (!req.user) {
     return res.status(401).json({
       success: false,
@@ -69,7 +74,7 @@ export const getChildStickersByParent = asyncHandler(async (req: Request, res: R
   
   const { childId } = req.params;
   
-  const stickers = await stickerService.getChildStickersByParent(req.user.id, childId);
+  const stickers = await stickerService.getChildStickers(childId);
   
   res.status(200).json({
     success: true,
@@ -78,32 +83,10 @@ export const getChildStickersByParent = asyncHandler(async (req: Request, res: R
 });
 
 /**
- * 스티커 상세 조회
- * @route GET /api/stickers/:id
- */
-export const getStickerById = asyncHandler(async (req: Request, res: Response) => {
-  if (!req.user) {
-    return res.status(401).json({
-      success: false,
-      message: '인증이 필요합니다.'
-    });
-  }
-  
-  const { id } = req.params;
-  
-  const sticker = await stickerService.getStickerById(id, req.user.id);
-  
-  res.status(200).json({
-    success: true,
-    data: sticker
-  });
-});
-
-/**
- * 스티커 삭제 (부모 전용)
+ * 스티커 삭제
  * @route DELETE /api/stickers/:id
  */
-export const deleteSticker = asyncHandler(async (req: Request, res: Response) => {
+export const deleteSticker = asyncHandler(async (req: any, res: any) => {
   if (!req.user) {
     return res.status(401).json({
       success: false,
@@ -122,10 +105,52 @@ export const deleteSticker = asyncHandler(async (req: Request, res: Response) =>
 });
 
 /**
- * 스티커 통계 (자녀용)
+ * 자녀의 스티커 개수 조회 (부모용)
+ * @route GET /api/stickers/child/:childId/count
+ */
+export const getChildStickerCount = asyncHandler(async (req: any, res: any) => {
+  if (!req.user) {
+    return res.status(401).json({
+      success: false,
+      message: '인증이 필요합니다.'
+    });
+  }
+  
+  const { childId } = req.params;
+  
+  const count = await stickerService.getChildStickerCount(childId);
+  
+  res.status(200).json({
+    success: true,
+    data: { count }
+  });
+});
+
+/**
+ * 자신의 스티커 목록 조회 (자녀용)
+ * @route GET /api/stickers/child
+ */
+export const getChildStickers = asyncHandler(async (req: any, res: any) => {
+  if (!req.user) {
+    return res.status(401).json({
+      success: false,
+      message: '인증이 필요합니다.'
+    });
+  }
+  
+  const stickers = await stickerService.getChildStickersByUserId(req.user.id);
+  
+  res.status(200).json({
+    success: true,
+    data: stickers
+  });
+});
+
+/**
+ * 자신의 스티커 통계 조회 (자녀용)
  * @route GET /api/stickers/stats
  */
-export const getChildStickerStats = asyncHandler(async (req: Request, res: Response) => {
+export const getChildStickerStats = asyncHandler(async (req: any, res: any) => {
   if (!req.user) {
     return res.status(401).json({
       success: false,
@@ -142,10 +167,10 @@ export const getChildStickerStats = asyncHandler(async (req: Request, res: Respo
 });
 
 /**
- * 특정 자녀의 스티커 개수 조회
- * @route GET /api/stickers/child/:childId/count
+ * 스티커 상세 조회
+ * @route GET /api/stickers/:id
  */
-export const getChildStickerCount = asyncHandler(async (req: Request, res: Response) => {
+export const getStickerById = asyncHandler(async (req: any, res: any) => {
   if (!req.user) {
     return res.status(401).json({
       success: false,
@@ -153,13 +178,12 @@ export const getChildStickerCount = asyncHandler(async (req: Request, res: Respo
     });
   }
   
-  const { childId } = req.params;
+  const { id } = req.params;
   
-  const stickerStats = await stickerService.getChildStickerCount(childId, req.user.id);
+  const sticker = await stickerService.getStickerById(id, req.user.id);
   
   res.status(200).json({
     success: true,
-    data: stickerStats
+    data: sticker
   });
 });
-
