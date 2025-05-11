@@ -390,77 +390,86 @@ export const getPlantCollection = async (childId: string) => {
  * 식물 건강 감소 처리 (스케줄러용)
  */
 export const decreasePlantHealth = async () => {
-  // 현재 진행 중인 모든 식물 조회
-  const activePlants = await prisma.plant.findMany({
-    where: {
-      isCompleted: false
-    }
-  });
-
-  const today = new Date();
-  const results = [];
-
-  // 각 식물의 건강 감소 처리
-  for (const plant of activePlants) {
-    const lastWatered = new Date(plant.lastWatered);
-    const daysSinceLastWatered = Math.floor((today.getTime() - lastWatered.getTime()) / (1000 * 60 * 60 * 24));
+    // 현재 진행 중인 모든 식물 조회
+    const activePlants = await prisma.plant.findMany({
+      where: {
+        isCompleted: false
+      }
+    });
+  
+    const today = new Date();
     
-    // 물주기를 3일 이상 안했으면 건강 감소
-    if (daysSinceLastWatered >= 3) {
-      // 일수에 비례해 건강 감소 (3일부터 하루당 5씩 감소)
-      const healthDecrease = Math.min(plant.health, 5 * (daysSinceLastWatered - 2));
+    // 명시적으로 타입 선언
+    interface PlantHealthUpdate {
+      plantId: string;
+      previousHealth: number;
+      newHealth: number;
+      daysSinceLastWatered: number;
+    }
+    
+    const results: PlantHealthUpdate[] = [];
+  
+    // 각 식물의 건강 감소 처리
+    for (const plant of activePlants) {
+      const lastWatered = new Date(plant.lastWatered);
+      const daysSinceLastWatered = Math.floor((today.getTime() - lastWatered.getTime()) / (1000 * 60 * 60 * 24));
       
-      // 건강이 0 이하면 식물 시들 위험
-      const updatedHealth = Math.max(0, plant.health - healthDecrease);
-      
-      // 식물 상태 업데이트
-      const updatedPlant = await prisma.plant.update({
-        where: { id: plant.id },
-        data: {
-          health: updatedHealth
-        }
-      });
-      
-      // 건강이 30% 이하면 알림 생성
-      if (updatedHealth <= 30) {
-        try {
-          // 자녀 정보 조회
-          const childProfile = await prisma.childProfile.findUnique({
-            where: { id: plant.childId },
-            include: {
-              user: true
-            }
-          });
-          
-          if (childProfile && childProfile.user) {
-            // 알림 생성
-            await prisma.notification.create({
-              data: {
-                userId: childProfile.user.id,
-                title: '식물이 물이 필요해요!',
-                content: `${plant.name || '식물'}의 건강이 좋지 않아요. 어서 물을 줘야 해요!`,
-                notificationType: 'SYSTEM',
-                relatedId: plant.id,
-                isRead: false
+      // 물주기를 3일 이상 안했으면 건강 감소
+      if (daysSinceLastWatered >= 3) {
+        // 일수에 비례해 건강 감소 (3일부터 하루당 5씩 감소)
+        const healthDecrease = Math.min(plant.health, 5 * (daysSinceLastWatered - 2));
+        
+        // 건강이 0 이하면 식물 시들 위험
+        const updatedHealth = Math.max(0, plant.health - healthDecrease);
+        
+        // 식물 상태 업데이트
+        const updatedPlant = await prisma.plant.update({
+          where: { id: plant.id },
+          data: {
+            health: updatedHealth
+          }
+        });
+        
+        // 건강이 30% 이하면 알림 생성
+        if (updatedHealth <= 30) {
+          try {
+            // 자녀 정보 조회
+            const childProfile = await prisma.childProfile.findUnique({
+              where: { id: plant.childId },
+              include: {
+                user: true
               }
             });
+            
+            if (childProfile && childProfile.user) {
+              // 알림 생성
+              await prisma.notification.create({
+                data: {
+                  userId: childProfile.user.id,
+                  title: '식물이 물이 필요해요!',
+                  content: `${plant.name || '식물'}의 건강이 좋지 않아요. 어서 물을 줘야 해요!`,
+                  notificationType: 'SYSTEM',
+                  relatedId: plant.id,
+                  isRead: false
+                }
+              });
+            }
+          } catch (error) {
+            console.error('알림 생성 실패:', error);
           }
-        } catch (error) {
-          console.error('알림 생성 실패:', error);
         }
+        
+        results.push({
+          plantId: plant.id,
+          previousHealth: plant.health,
+          newHealth: updatedHealth,
+          daysSinceLastWatered
+        });
       }
-      
-      results.push({
-        plantId: plant.id,
-        previousHealth: plant.health,
-        newHealth: updatedHealth,
-        daysSinceLastWatered
-      });
     }
-  }
-
-  return results;
-};
+  
+    return results;
+  };
 
 /**
  * 식물 유형 추가 (관리자용)
