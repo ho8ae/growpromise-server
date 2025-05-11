@@ -16,6 +16,9 @@ model User {
   profileImage  String?
   createdAt     DateTime  @default(now())
   updatedAt     DateTime  @updatedAt
+  passwordResetToken    String?   // 추가: 비밀번호 재설정 토큰
+  passwordResetExpires  DateTime? // 추가: 비밀번호 재설정 토큰 만료 시간
+  
 
   // 관계
   parentProfile ParentProfile?
@@ -34,7 +37,7 @@ model ParentProfile {
   user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
   connectionCode       String?                // 6자리 랜덤 숫자 연결 코드
   connectionCodeExpires DateTime?             // 연결 코드 만료 시간
-  
+
   // 관계
   children  ChildParentConnection[]
   promises  PromiseTask[]  
@@ -47,11 +50,16 @@ model ChildProfile {
   user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
   birthDate DateTime?
   characterStage Int  @default(1)
+  currentPlantId  String?  // 현재 키우고 있는 식물 ID
+  totalCompletedPlants Int @default(0)
+  wateringStreak  Int     @default(0)  // 연속 물주기 일수
+  
   
   // 관계
   parents   ChildParentConnection[]
   promises  PromiseAssignment[]
   stickers  Sticker[]
+  plants    Plant[]
 }
 
 model ChildParentConnection {
@@ -163,4 +171,50 @@ enum NotificationType {
   PROMISE_REJECTED
   REWARD_EARNED
   SYSTEM
+}
+
+// 씨앗 및 식물 종류
+model PlantType {
+  id               String    @id @default(uuid())
+  name             String
+  description      String?
+  growthStages     Int       // 성장 단계 수
+  difficulty       String    // EASY, MEDIUM, HARD
+  category         String    // FLOWER, TREE, VEGETABLE, etc.
+  unlockRequirement Int?     // 필요한 완료 식물 수
+  imagePrefix      String    // 이미지 경로 접두사
+  createdAt        DateTime  @default(now())
+  
+  // 관계
+  plants           Plant[]
+}
+
+// 사용자가 키우는 식물
+model Plant {
+  id              String    @id @default(uuid())
+  childId         String
+  plantTypeId     String
+  name            String?   // 사용자 지정 이름
+  currentStage    Int       @default(1)
+  health          Int       @default(100)  // 0-100
+  lastWatered     DateTime  @default(now())
+  isCompleted     Boolean   @default(false)
+  startedAt       DateTime  @default(now())
+  completedAt     DateTime?
+  
+  // 관계
+  child           ChildProfile @relation(fields: [childId], references: [id], onDelete: Cascade)
+  plantType       PlantType @relation(fields: [plantTypeId], references: [id])
+  wateringLogs    WateringLog[]
+}
+
+// 물주기 로그
+model WateringLog {
+  id          String   @id @default(uuid())
+  plantId     String
+  timestamp   DateTime @default(now())
+  healthGain  Int
+  
+  // 관계
+  plant       Plant    @relation(fields: [plantId], references: [id], onDelete: Cascade)
 }
