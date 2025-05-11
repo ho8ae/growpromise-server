@@ -28,3 +28,4 @@ export const getStickerFilterSchema = Joi.object({
     'string.empty': '보상 ID는 필수입니다.'
   })
 });
+

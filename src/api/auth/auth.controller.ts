@@ -124,3 +124,72 @@ export const changePassword = asyncHandler(async (req: Request, res: Response) =
     data: result
   });
 });
+
+/**
+ * 아이디 찾기
+ * @route POST /api/auth/find-username
+ */
+export const findUsername = asyncHandler(async (req: Request, res: Response) => {
+  const { email } = req.body;
+  
+  if (!email) {
+    return res.status(400).json({
+      success: false,
+      message: '이메일은 필수입니다.'
+    });
+  }
+  
+  const result = await authService.findUsername(email);
+  
+  res.status(200).json({
+    success: true,
+    message: '아이디를 찾았습니다.',
+    data: result
+  });
+});
+
+/**
+ * 비밀번호 재설정 요청
+ * @route POST /api/auth/request-password-reset
+ */
+export const requestPasswordReset = asyncHandler(async (req: Request, res: Response) => {
+  const { email } = req.body;
+  
+  if (!email) {
+    return res.status(400).json({
+      success: false,
+      message: '이메일은 필수입니다.'
+    });
+  }
+  
+  const result = await authService.generatePasswordResetToken(email);
+  
+  res.status(200).json({
+    success: true,
+    message: '비밀번호 재설정 이메일이 전송되었습니다.',
+    data: result
+  });
+});
+
+/**
+ * 비밀번호 재설정
+ * @route POST /api/auth/reset-password
+ */
+export const resetPassword = asyncHandler(async (req: Request, res: Response) => {
+  const { token, password } = req.body;
+  
+  if (!token || !password) {
+    return res.status(400).json({
+      success: false,
+      message: '토큰과 새 비밀번호가 필요합니다.'
+    });
+  }
+  
+  const result = await authService.resetPassword(token, password);
+  
+  res.status(200).json({
+    success: true,
+    message: '비밀번호가 성공적으로 재설정되었습니다.',
+    data: result
+  });
+});

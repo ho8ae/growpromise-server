@@ -1,7 +1,12 @@
 import express from 'express';
 import * as rewardController from './reward.controller';
 import { validate } from '../../middleware/validation.middleware';
-import { authenticate, requireParent } from '../../middleware/auth.middleware';
+import { 
+  authenticate, 
+  requireParent, 
+  requireChild, 
+  checkParentChildRelationship 
+} from '../../middleware/auth.middleware';
 import { createRewardSchema, updateRewardSchema } from './reward.validation';
 
 const router = express.Router();
@@ -16,8 +21,8 @@ router.put('/:id', requireParent, validate(updateRewardSchema), rewardController
 router.delete('/:id', requireParent, rewardController.deleteReward);
 
 // 자녀 라우트
-router.get('/child', rewardController.getChildRewards);
-router.post('/:id/achieve', rewardController.achieveReward);
+router.get('/child', requireChild, rewardController.getChildRewards);
+router.post('/:id/achieve', requireChild, rewardController.achieveReward);
 
 // 공통 라우트
 router.get('/:id', rewardController.getRewardById);

@@ -34,6 +34,13 @@
  *           type: string
  *           format: date-time
  *           description: 계정 생성 시간
+ *         passwordResetToken:
+ *           type: string
+ *           description: 비밀번호 재설정 토큰
+ *         passwordResetExpires:
+ *           type: string
+ *           format: date-time
+ *           description: 비밀번호 재설정 토큰 만료 시간
  *
  *     Promise:
  *       type: object
@@ -122,9 +129,6 @@
  *         imageUrl:
  *           type: string
  *           description: 스티커 이미지 URL
- *         rewardId:
- *           type: string
- *           description: 보상 ID (사용된 경우)
  *         createdAt:
  *           type: string
  *           format: date-time
@@ -189,6 +193,118 @@
  *           type: string
  *           format: date-time
  *           description: 알림 생성 시간
+ *
+ *     PlantType:
+ *       type: object
+ *       required:
+ *         - name
+ *         - growthStages
+ *         - difficulty
+ *         - category
+ *         - imagePrefix
+ *       properties:
+ *         id:
+ *           type: string
+ *           description: 식물 유형 고유 ID
+ *         name:
+ *           type: string
+ *           description: 식물 이름
+ *         description:
+ *           type: string
+ *           description: 식물 설명
+ *         growthStages:
+ *           type: integer
+ *           minimum: 1
+ *           maximum: 10
+ *           description: 성장 단계 수
+ *         difficulty:
+ *           type: string
+ *           enum: [EASY, MEDIUM, HARD]
+ *           description: 난이도
+ *         category:
+ *           type: string
+ *           enum: [FLOWER, TREE, VEGETABLE, FRUIT, OTHER]
+ *           description: 카테고리
+ *         unlockRequirement:
+ *           type: integer
+ *           minimum: 0
+ *           description: 잠금 해제에 필요한 완료된 식물 수
+ *         imagePrefix:
+ *           type: string
+ *           description: 이미지 경로 접두사
+ *         createdAt:
+ *           type: string
+ *           format: date-time
+ *           description: 생성 시간
+ *
+ *     Plant:
+ *       type: object
+ *       required:
+ *         - childId
+ *         - plantTypeId
+ *         - currentStage
+ *         - health
+ *       properties:
+ *         id:
+ *           type: string
+ *           description: 식물 인스턴스 고유 ID
+ *         childId:
+ *           type: string
+ *           description: 자녀 ID
+ *         plantTypeId:
+ *           type: string
+ *           description: 식물 유형 ID
+ *         name:
+ *           type: string
+ *           description: 식물 이름 (사용자 지정)
+ *         currentStage:
+ *           type: integer
+ *           minimum: 1
+ *           description: 현재 성장 단계
+ *         health:
+ *           type: integer
+ *           minimum: 0
+ *           maximum: 100
+ *           description: 식물 건강도 (0-100)
+ *         lastWatered:
+ *           type: string
+ *           format: date-time
+ *           description: 마지막 물주기 시간
+ *         isCompleted:
+ *           type: boolean
+ *           description: 완료 여부
+ *         startedAt:
+ *           type: string
+ *           format: date-time
+ *           description: 시작 시간
+ *         completedAt:
+ *           type: string
+ *           format: date-time
+ *           description: 완료 시간
+ *         plantType:
+ *           $ref: '#/components/schemas/PlantType'
+ *
+ *     WateringLog:
+ *       type: object
+ *       required:
+ *         - plantId
+ *         - timestamp
+ *         - healthGain
+ *       properties:
+ *         id:
+ *           type: string
+ *           description: 물주기 로그 고유 ID
+ *         plantId:
+ *           type: string
+ *           description: 식물 ID
+ *         timestamp:
+ *           type: string
+ *           format: date-time
+ *           description: 물주기 시간
+ *         healthGain:
+ *           type: integer
+ *           minimum: 0
+ *           description: 건강 회복량
  *
  *   responses:
  *     Unauthorized:

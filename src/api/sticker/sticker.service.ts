@@ -8,9 +8,9 @@ const getParentProfileId = async (userId: string): Promise<string> => {
   const parentProfile = await prisma.parentProfile.findFirst({
     where: {
       user: {
-        id: userId
-      }
-    }
+        id: userId,
+      },
+    },
   });
 
   if (!parentProfile) {
@@ -27,9 +27,9 @@ const getChildProfileId = async (userId: string): Promise<string> => {
   const childProfile = await prisma.childProfile.findFirst({
     where: {
       user: {
-        id: userId
-      }
-    }
+        id: userId,
+      },
+    },
   });
 
   if (!childProfile) {
@@ -42,12 +42,15 @@ const getChildProfileId = async (userId: string): Promise<string> => {
 /**
  * 부모-자녀 관계 확인 (내부 함수)
  */
-const verifyParentChildRelationship = async (parentProfileId: string, childId: string): Promise<boolean> => {
+const verifyParentChildRelationship = async (
+  parentProfileId: string,
+  childId: string,
+): Promise<boolean> => {
   const connection = await prisma.childParentConnection.findFirst({
     where: {
       parentId: parentProfileId,
-      childId
-    }
+      childId,
+    },
   });
 
   return !!connection;
@@ -62,12 +65,15 @@ export const createSticker = async (
   title: string,
   description: string | null,
   imageUrl: string | null,
-  rewardId: string | null
+  rewardId: string | null,
 ) => {
   const parentProfileId = await getParentProfileId(userId);
 
   // 부모-자녀 관계 확인
-  const hasRelationship = await verifyParentChildRelationship(parentProfileId, childId);
+  const hasRelationship = await verifyParentChildRelationship(
+    parentProfileId,
+    childId,
+  );
   if (!hasRelationship) {
     throw new ApiError('이 자녀에 대한 권한이 없습니다.', 403);
   }
@@ -75,7 +81,7 @@ export const createSticker = async (
   // 보상 ID가 있는 경우 해당 보상 검증
   if (rewardId) {
     const reward = await prisma.reward.findUnique({
-      where: { id: rewardId }
+      where: { id: rewardId },
     });
 
     if (!reward) {
@@ -94,14 +100,14 @@ export const createSticker = async (
       title,
       description,
       imageUrl: imageUrl || '/stickers/default-star.png', // 기본 이미지 경로
-      rewardId
-    }
+      rewardId,
+    },
   });
 
   // 자녀에게 알림 생성
   const childProfile = await prisma.childProfile.findUnique({
     where: { id: childId },
-    select: { userId: true }
+    select: { userId: true },
   });
 
   if (childProfile) {
@@ -111,8 +117,8 @@ export const createSticker = async (
         title: '새로운 스티커를 받았어요!',
         content: `${title} 스티커를 획득했습니다! 축하합니다!`,
         notificationType: 'SYSTEM',
-        relatedId: sticker.id
-      }
+        relatedId: sticker.id,
+      },
     });
   }
 
@@ -122,7 +128,10 @@ export const createSticker = async (
 /**
  * 자녀의 스티커 목록 조회
  */
-export const getChildStickers = async (userId: string, isParent: boolean = false) => {
+export const getChildStickers = async (
+  userId: string,
+  isParent: boolean = false,
+) => {
   let childId: string;
 
   if (isParent) {
@@ -135,39 +144,45 @@ export const getChildStickers = async (userId: string, isParent: boolean = false
 
   return await prisma.sticker.findMany({
     where: {
-      childId
+      childId,
     },
     orderBy: {
-      createdAt: 'desc'
+      createdAt: 'desc',
     },
     include: {
-      reward: true
-    }
+      reward: true,
+    },
   });
 };
 
 /**
  * 특정 자녀의 스티커 목록 조회 (부모용)
  */
-export const getChildStickersByParent = async (userId: string, childId: string) => {
+export const getChildStickersByParent = async (
+  userId: string,
+  childId: string,
+) => {
   const parentProfileId = await getParentProfileId(userId);
 
   // 부모-자녀 관계 확인
-  const hasRelationship = await verifyParentChildRelationship(parentProfileId, childId);
+  const hasRelationship = await verifyParentChildRelationship(
+    parentProfileId,
+    childId,
+  );
   if (!hasRelationship) {
     throw new ApiError('이 자녀에 대한 권한이 없습니다.', 403);
   }
 
   return await prisma.sticker.findMany({
     where: {
-      childId
+      childId,
     },
     orderBy: {
-      createdAt: 'desc'
+      createdAt: 'desc',
     },
     include: {
-      reward: true
-    }
+      reward: true,
+    },
   });
 };
 
@@ -182,13 +197,13 @@ export const getStickerById = async (stickerId: string, userId: string) => {
         include: {
           user: {
             select: {
-              username: true
-            }
-          }
-        }
+              username: true,
+            },
+          },
+        },
       },
-      reward: true
-    }
+      reward: true,
+    },
   });
 
   if (!sticker) {
@@ -198,7 +213,7 @@ export const getStickerById = async (stickerId: string, userId: string) => {
   // 권한 확인
   const user = await prisma.user.findUnique({
     where: { id: userId },
-    select: { userType: true }
+    select: { userType: true },
   });
 
   if (!user) {
@@ -207,14 +222,17 @@ export const getStickerById = async (stickerId: string, userId: string) => {
 
   if (user.userType === 'PARENT') {
     const parentProfileId = await getParentProfileId(userId);
-    const hasRelationship = await verifyParentChildRelationship(parentProfileId, sticker.childId);
-    
+    const hasRelationship = await verifyParentChildRelationship(
+      parentProfileId,
+      sticker.childId,
+    );
+
     if (!hasRelationship) {
       throw new ApiError('이 스티커에 대한 권한이 없습니다.', 403);
     }
   } else if (user.userType === 'CHILD') {
     const childProfileId = await getChildProfileId(userId);
-    
+
     if (sticker.childId !== childProfileId) {
       throw new ApiError('이 스티커에 대한 권한이 없습니다.', 403);
     }
@@ -232,8 +250,8 @@ export const deleteSticker = async (stickerId: string, userId: string) => {
   const sticker = await prisma.sticker.findUnique({
     where: { id: stickerId },
     include: {
-      child: true
-    }
+      child: true,
+    },
   });
 
   if (!sticker) {
@@ -241,81 +259,92 @@ export const deleteSticker = async (stickerId: string, userId: string) => {
   }
 
   // 부모-자녀 관계 확인
-  const hasRelationship = await verifyParentChildRelationship(parentProfileId, sticker.childId);
+  const hasRelationship = await verifyParentChildRelationship(
+    parentProfileId,
+    sticker.childId,
+  );
   if (!hasRelationship) {
     throw new ApiError('이 스티커를 삭제할 권한이 없습니다.', 403);
   }
 
   return await prisma.sticker.delete({
-    where: { id: stickerId }
+    where: { id: stickerId },
   });
 };
 
 /**
- * 스티커 통계 (자녀용)
+ * 자녀의 스티커 통계
  */
-export const getChildStickerStats = async (userId: string) => {
-  const childProfileId = await getChildProfileId(userId);
-
-  // 전체 스티커 수
-  const totalStickers = await prisma.sticker.count({
-    where: {
-      childId: childProfileId
-    }
+export const getChildStickerStats = async (childId: string) => {
+  // 자녀 프로필 확인
+  const childProfile = await prisma.childProfile.findUnique({
+    where: { id: childId },
   });
 
-  // 보상 별 스티커 분류
-  const stickersByReward = await prisma.sticker.groupBy({
-    by: ['rewardId'],
+  if (!childProfile) {
+    throw new ApiError('자녀 프로필을 찾을 수 없습니다.', 404);
+  }
+
+  // 사용 가능한 스티커 수 (현재 보유한 스티커는 모두 사용 가능)
+  const availableStickers = await prisma.sticker.count({
     where: {
-      childId: childProfileId
+      childId,
     },
-    _count: {
-      id: true
-    }
   });
 
-  // 보상 정보 조회
-  const rewards = await prisma.reward.findMany({
+  // 보상별 통계
+  const rewardStats = await prisma.reward.findMany({
     where: {
-      stickers: {
-        some: {
-          childId: childProfileId
-        }
-      }
-    }
+      isActive: true,
+      parentId: {
+        in: (
+          await prisma.childParentConnection.findMany({
+            where: { childId },
+            select: { parentId: true },
+          })
+        ).map((conn) => conn.parentId),
+      },
+    },
+    select: {
+      id: true,
+      title: true,
+      requiredStickers: true,
+    },
   });
 
-  // 응답 형식 구성
-  const rewardStats = stickersByReward.map(item => {
-    const reward = rewards.find(r => r.id === item.rewardId);
-    return {
-      rewardId: item.rewardId,
-      rewardTitle: reward?.title || '미분류',
-      count: item._count.id,
-      requiredStickers: reward?.requiredStickers || 0,
-      progress: reward ? (item._count.id / reward.requiredStickers) * 100 : 0
-    };
-  });
+  // 각 보상에 대한 달성 가능 여부 계산
+  const rewardStatsWithProgress = rewardStats.map((reward) => ({
+    rewardId: reward.id,
+    rewardTitle: reward.title,
+    requiredStickers: reward.requiredStickers,
+    progress: Math.min(
+      100,
+      Math.floor((availableStickers / reward.requiredStickers) * 100),
+    ),
+    isAchievable: availableStickers >= reward.requiredStickers,
+  }));
 
   return {
-    totalStickers,
-    rewardStats
+    totalStickers: availableStickers,
+    availableStickers,
+    rewardStats: rewardStatsWithProgress,
   };
 };
-
 
 /**
  * 특정 자녀의 스티커 개수 조회
  */
-export const getChildStickerCount = async (childId: string, parentId: string) => {
+export const getChildStickerCount = async (
+  childId: string,
+  parentId: string,
+) => {
   // 부모-자녀 관계 확인
   const parentProfile = await prisma.parentProfile.findFirst({
     where: {
       user: {
-        id: parentId
-      }
-    }
+        id: parentId,
+      },
+    },
   });
 
   if (!parentProfile) {
@@ -326,33 +355,141 @@ export const getChildStickerCount = async (childId: string, parentId: string) =>
   const connection = await prisma.childParentConnection.findFirst({
     where: {
       parentId: parentProfile.id,
-      childId
-    }
+      childId,
+    },
   });
 
   if (!connection) {
     throw new ApiError('이 자녀에 대한 접근 권한이 없습니다.', 403);
   }
 
-  // 전체 스티커 개수
-  const totalStickers = await prisma.sticker.count({
-    where: {
-      childId
-    }
-  });
-
-  // 사용된 스티커 개수 (보상에 사용됨)
-  const usedStickers = await prisma.sticker.count({
+  // 보유 중인 스티커 개수 (모두 사용 가능)
+  const availableStickers = await prisma.sticker.count({
     where: {
       childId,
-      rewardId: { not: null }
-    }
+    },
   });
 
+  // 이전에 보상에 사용된 스티커 통계는 제공할 수 없음 (삭제됨)
+
   return {
-    totalStickers,
-    usedStickers,
-    availableStickers: totalStickers - usedStickers
+    totalStickers: availableStickers,
+    availableStickers,
   };
 };
 
+/**
+ * 보상 달성 및 스티커 사용
+ */
+export const achieveReward = async (childId: string, rewardId: string) => {
+  // 자녀 프로필 확인
+  const childProfile = await prisma.childProfile.findUnique({
+    where: { id: childId },
+  });
+
+  const childUsername = await prisma.user.findUnique({
+    where: { id: childProfile?.userId },
+    select: { username: true },
+  });
+
+  if (!childProfile) {
+    throw new ApiError('자녀 프로필을 찾을 수 없습니다.', 404);
+  }
+
+  // 보상 확인
+  const reward = await prisma.reward.findUnique({
+    where: { id: rewardId },
+  });
+
+  if (!reward) {
+    throw new ApiError('보상을 찾을 수 없습니다.', 404);
+  }
+
+  if (!reward.isActive) {
+    throw new ApiError('이 보상은 현재 비활성화되어 있습니다.', 400);
+  }
+
+  // 스티커 수 확인
+  const availableStickers = await prisma.sticker.count({
+    where: {
+      childId,
+      rewardId: null, // 사용되지 않은 스티커만
+    },
+  });
+
+  if (availableStickers < reward.requiredStickers) {
+    throw new ApiError(
+      `스티커가 부족합니다. 필요: ${reward.requiredStickers}개, 보유: ${availableStickers}개`,
+      400,
+    );
+  }
+
+  // 트랜잭션으로 처리
+  const result = await prisma.$transaction(async (prisma) => {
+    // 스티커 사용 처리 - 필요한 수만큼 스티커 가져오기
+    const stickersToUse = await prisma.sticker.findMany({
+      where: {
+        childId,
+        rewardId: null,
+      },
+      orderBy: {
+        createdAt: 'asc', // 오래된 스티커부터 사용
+      },
+      take: reward.requiredStickers,
+    });
+
+    // 스티커 ID 목록
+    const stickerIds = stickersToUse.map((sticker) => sticker.id);
+
+    // 수정: 스티커 삭제 (요구사항에 따라 rewardId 설정 대신 삭제)
+    await prisma.sticker.deleteMany({
+      where: {
+        id: {
+          in: stickerIds,
+        },
+      },
+    });
+
+    // 부모에게 알림 생성
+    // 부모 ID 찾기
+    const parentConnections = await prisma.childParentConnection.findMany({
+      where: { childId },
+      include: {
+        parent: {
+          include: {
+            user: true,
+          },
+        },
+      },
+    });
+
+    
+    //자녀 프로필 확인
+
+
+    // 각 부모에게 알림 보내기
+    for (const connection of parentConnections) {
+      if (connection.parent && connection.parent.user) {
+        await prisma.notification.create({
+          data: {
+            userId: connection.parent.user.id,
+            title: '보상 달성 알림',
+            content: `${
+              childProfile.userId ? childUsername : '자녀'
+            }가 "${reward.title}" 보상을 달성했습니다!`,
+            notificationType: 'REWARD_EARNED',
+            relatedId: reward.id,
+            isRead: false,
+          },
+        });
+      }
+    }
+
+    return {
+      reward,
+      usedStickers: stickerIds.length,
+    };
+  });
+
+  return result;
+};
