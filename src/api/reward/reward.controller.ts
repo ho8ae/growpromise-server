@@ -2,6 +2,38 @@ import { Request, Response } from 'express';
 import { asyncHandler } from '../../middleware/error.middleware';
 import * as rewardService from './reward.service';
 
+
+const convertBigIntToNumber = (obj: any): any => {
+  if (obj === null || obj === undefined) {
+    return obj;
+  }
+  
+  // BigInt인 경우 Number로 변환
+  if (typeof obj === 'bigint') {
+    return Number(obj);
+  }
+  
+  // 배열인 경우 각 요소에 재귀 적용
+  if (Array.isArray(obj)) {
+    return obj.map(item => convertBigIntToNumber(item));
+  }
+  
+  // 객체인 경우 각 프로퍼티에 재귀 적용
+  if (typeof obj === 'object') {
+    const result: any = {};
+    for (const key in obj) {
+      if (Object.prototype.hasOwnProperty.call(obj, key)) {
+        result[key] = convertBigIntToNumber(obj[key]);
+      }
+    }
+    return result;
+  }
+  
+  // 그 외의 경우 그대로 반환
+  return obj;
+};
+
+
 /**
  * 보상 생성 (부모 전용)
  * @route POST /api/rewards
@@ -65,10 +97,10 @@ export const getChildRewards = asyncHandler(async (req: Request, res: Response) 
   
   const rewards = await rewardService.getChildRewards(req.user.id);
   
-  res.status(200).json({
-    success: true,
-    data: rewards
-  });
+  // 최종 결과 변환 후 응답
+  const safeRewards = convertBigIntToNumber(rewards);
+  
+  res.json({ success: true, data: safeRewards });
 });
 
 /**
@@ -167,4 +199,24 @@ export const achieveReward = asyncHandler(async (req: Request, res: Response) =>
     message: '보상이 성공적으로 달성되었습니다.',
     data: result
   });
+});
+
+/**
+ * 보상 이력 조회 (부모/자녀 공통)
+ * @route GET /api/rewards/history
+ */
+export const getRewardHistory = asyncHandler(async (req: Request, res: Response) => {
+  if (!req.user) {
+    return res.status(401).json({
+      success: false,
+      message: '인증이 필요합니다.'
+    });
+  }
+  
+  const result = await rewardService.getRewardHistory(req.user.id);
+  
+  // 최종 결과 변환 후 응답
+  const safeResult = convertBigIntToNumber(result);
+  
+  res.json({ success: true, data: safeResult });
 });

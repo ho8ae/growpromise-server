@@ -123,25 +123,41 @@ export const getChildRewards = async (userId: string) => {
     }
   });
 
-  // 각 보상에 대한 자녀의 스티커 수 계산
+  // 사용 가능한 스티커 수 (보상에 사용되지 않은 스티커)
+  const availableStickers = await prisma.sticker.count({
+    where: {
+      childId: childProfileId,
+      rewardId: null
+    }
+  });
+
+  // 각 보상에 대한 자녀의 스티커 수 계산 및 달성 여부 확인
   const rewardsWithProgress = await Promise.all(
     rewards.map(async (reward) => {
-      const stickersCount = await prisma.sticker.count({
+      // 이미 달성한 보상인지 확인
+      const rewardHistory = await prisma.rewardHistory.findFirst({
         where: {
           childId: childProfileId,
-          rewardId: null // 아직 보상에 사용되지 않은 스티커만 계산
+          rewardId: reward.id
         }
       });
 
+      // 이미 달성한 보상이라면 제외 (null 반환)
+      if (rewardHistory) {
+        return null;
+      }
+
       return {
         ...reward,
-        availableStickers: stickersCount,
-        progress: (stickersCount / reward.requiredStickers) * 100
+        availableStickers: availableStickers,
+        progress: (availableStickers / reward.requiredStickers) * 100,
+        canAchieve: availableStickers >= reward.requiredStickers
       };
     })
   );
 
-  return rewardsWithProgress;
+  // null 값(이미 달성한 보상) 필터링
+  return rewardsWithProgress.filter(reward => reward !== null);
 };
 
 /**
@@ -360,6 +376,16 @@ export const achieveReward = async (rewardId: string, userId: string) => {
       });
     }
 
+    // 보상 이력 생성 (RewardHistory)
+    const rewardHistory = await prisma.rewardHistory.create({
+      data: {
+        childId: childProfileId,
+        parentId: reward.parentId,
+        rewardId: reward.id,
+        stickerCount: reward.requiredStickers
+      }
+    });
+
     // 부모에게 알림 생성
     await prisma.notification.create({
       data: {
@@ -371,9 +397,28 @@ export const achieveReward = async (rewardId: string, userId: string) => {
       }
     });
 
+    // 자녀에게도 알림 생성
+    const childUser = await prisma.childProfile.findUnique({
+      where: { id: childProfileId },
+      select: { userId: true }
+    });
+
+    if (childUser) {
+      await prisma.notification.create({
+        data: {
+          userId: childUser.userId,
+          title: '보상 달성 성공!',
+          content: `"${reward.title}" 보상을 성공적으로 달성했어요!`,
+          notificationType: 'REWARD_EARNED',
+          relatedId: rewardId
+        }
+      });
+    }
+
     return {
       reward,
-      usedStickers: stickersToUse.length
+      usedStickers: stickersToUse.length,
+      rewardHistory
     };
   });
 };
@@ -392,4 +437,69 @@ const getUserIdFromParentProfileId = async (prisma: any, parentProfileId: string
   }
 
   return parentProfile.userId;
+};
+
+/**
+ * 보상 이력 조회
+ */
+export const getRewardHistory = async (userId: string) => {
+  const user = await prisma.user.findUnique({
+    where: { id: userId },
+    select: { userType: true }
+  });
+
+  if (!user) {
+    throw new ApiError('사용자를 찾을 수 없습니다.', 404);
+  }
+
+  // 자녀인 경우
+  if (user.userType === 'CHILD') {
+    const childProfileId = await getChildProfileId(userId);
+    
+    return await prisma.rewardHistory.findMany({
+      where: {
+        childId: childProfileId
+      },
+      include: {
+        reward: true,
+        parent: {
+          include: {
+            user: {
+              select: {
+                username: true
+              }
+            }
+          }
+        }
+      },
+      orderBy: {
+        achievedAt: 'desc'
+      }
+    });
+  } 
+  // 부모인 경우
+  else {
+    const parentProfileId = await getParentProfileId(userId);
+    
+    return await prisma.rewardHistory.findMany({
+      where: {
+        parentId: parentProfileId
+      },
+      include: {
+        reward: true,
+        child: {
+          include: {
+            user: {
+              select: {
+                username: true
+              }
+            }
+          }
+        }
+      },
+      orderBy: {
+        achievedAt: 'desc'
+      }
+    });
+  }
 };
