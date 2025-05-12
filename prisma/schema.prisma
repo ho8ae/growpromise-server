@@ -42,6 +42,7 @@ model ParentProfile {
   children  ChildParentConnection[]
   promises  PromiseTask[]  
   rewards   Reward[]
+  rewardHistories RewardHistory[]
 }
 
 model ChildProfile {
@@ -60,6 +61,7 @@ model ChildProfile {
   promises  PromiseAssignment[]
   stickers  Sticker[]
   plants    Plant[]
+  rewards   RewardHistory[]
 }
 
 model ChildParentConnection {
@@ -148,6 +150,7 @@ model Reward {
   // 관계
   parent      ParentProfile @relation(fields: [parentId], references: [id], onDelete: Cascade)
   stickers    Sticker[]
+  rewardHistories RewardHistory[]
 }
 
 model Notification {
@@ -201,6 +204,9 @@ model Plant {
   isCompleted     Boolean   @default(false)
   startedAt       DateTime  @default(now())
   completedAt     DateTime?
+  experience      Int @default(0)    // 현재 경험치
+  experienceToGrow Int @default(100)         // 다음 단계로 성장하는데 필요한 경험치
+  canGrow          Boolean @default(false) // 성장 가능 여부
   
   // 관계
   child           ChildProfile @relation(fields: [childId], references: [id], onDelete: Cascade)
@@ -228,4 +234,18 @@ model StickerTemplate {
   imageUrl     String   // 스티커 이미지 URL (S3에 미리 업로드된 이미지)
   createdAt    DateTime @default(now())
   updatedAt    DateTime @updatedAt
+}
+
+model RewardHistory {
+  id          String   @id @default(uuid())
+  childId     String
+  parentId    String
+  rewardId    String
+  stickerCount Int
+  achievedAt  DateTime @default(now())
+  
+  // 관계
+  child       ChildProfile @relation(fields: [childId], references: [id], onDelete: Cascade)
+  parent      ParentProfile @relation(fields: [parentId], references: [id], onDelete: Cascade)
+  reward      Reward     @relation(fields: [rewardId], references: [id], onDelete: Cascade)
 }
