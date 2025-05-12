@@ -183,11 +183,25 @@ export const deleteSticker = async (stickerId: string, parentUserId: string) => 
  * 자녀의 스티커 개수 조회
  */
 export const getChildStickerCount = async (childId: string) => {
-  return await prisma.sticker.count({
+  // 총 스티커 수
+  const totalStickers = await prisma.sticker.count({
     where: {
       childId
     }
   });
+  
+  // 사용 가능한 스티커 수 (보상에 사용되지 않은 스티커)
+  const availableStickers = await prisma.sticker.count({
+    where: {
+      childId,
+      rewardId: null
+    }
+  });
+  
+  return {
+    totalStickers,
+    availableStickers
+  };
 };
 
 /**
@@ -221,6 +235,9 @@ export const getChildStickersByUserId = async (userId: string) => {
 /**
  * 스티커 통계 조회 (자녀용)
  */
+/**
+ * 스티커 통계 조회 (자녀용)
+ */
 export const getChildStickerStats = async (userId: string) => {
   // 자녀 프로필 확인
   const childProfile = await prisma.childProfile.findFirst({
@@ -242,6 +259,14 @@ export const getChildStickerStats = async (userId: string) => {
     }
   });
 
+  // 사용 가능한 스티커 수 (보상에 사용되지 않은 스티커)
+  const availableStickers = await prisma.sticker.count({
+    where: {
+      childId: childProfile.id,
+      rewardId: null
+    }
+  });
+
   // 월별 스티커 통계
   const monthlyStats = await prisma.$queryRaw`
     SELECT 
@@ -254,9 +279,25 @@ export const getChildStickerStats = async (userId: string) => {
     LIMIT 6
   `;
 
+  // 보상 사용 이력
+  const rewardHistory = await prisma.rewardHistory.findMany({
+    where: {
+      childId: childProfile.id
+    },
+    include: {
+      reward: true
+    },
+    orderBy: {
+      achievedAt: 'desc'
+    },
+    take: 10 // 최근 10개만
+  });
+
   return {
     totalStickers,
-    monthlyStats
+    availableStickers,
+    monthlyStats,
+    rewardHistory
   };
 };
 

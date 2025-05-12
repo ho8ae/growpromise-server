@@ -63,7 +63,13 @@ export const getCurrentPlant = async (childId: string) => {
           isCompleted: false
         },
         include: {
-          plantType: true
+          plantType: true,
+          wateringLogs: {
+            orderBy: {
+              timestamp: 'desc' as const
+            },
+            take: 5
+          }
         },
         orderBy: {
           startedAt: 'desc'
@@ -101,7 +107,13 @@ export const getChildPlants = async (childId: string) => {
   return prisma.plant.findMany({
     where: { childId },
     include: {
-      plantType: true
+      plantType: true,
+      wateringLogs: {
+        orderBy: {
+          timestamp: 'desc' as const
+        },
+        take: 5
+      }
     },
     orderBy: [
       { isCompleted: 'asc' as const },
@@ -150,6 +162,16 @@ export const startNewPlant = async (childId: string, plantTypeId: string, plantN
     throw new ApiError('이미 진행 중인 식물이 있습니다. 새 식물을 시작하려면 현재 식물을 완료하세요.', 400);
   }
 
+  // 새 식물을 위한 경험치 요구량 계산
+  // 난이도와 성장 단계에 따라 경험치 요구량 결정
+  const baseExperience = 10; // 기본 경험치 요구량
+  const difficultyMultiplier = 
+    plantType.difficulty === 'EASY' ? 1 :
+    plantType.difficulty === 'MEDIUM' ? 1.5 :
+    plantType.difficulty === 'HARD' ? 2 : 1;
+  
+  const experienceToGrow = Math.round(baseExperience * difficultyMultiplier);
+
   // 새 식물 생성
   const newPlant = await prisma.plant.create({
     data: {
@@ -160,7 +182,10 @@ export const startNewPlant = async (childId: string, plantTypeId: string, plantN
       health: 100,
       lastWatered: new Date(),
       isCompleted: false,
-      startedAt: new Date()
+      startedAt: new Date(),
+      experience: 0,
+      experienceToGrow: experienceToGrow,
+      canGrow: false
     }
   });
 
@@ -206,6 +231,9 @@ export const waterPlant = async (plantId: string) => {
   // 물주기로 인한 건강 회복량
   const healthGain = Math.min(10, 100 - plant.health);
   
+  // 물주기 경험치 추가
+  const experienceGain = 5; // 기본 물주기 경험치
+  
   // 연속 물주기 체크
   const oneDayAgo = new Date(today);
   oneDayAgo.setDate(oneDayAgo.getDate() - 1);
@@ -226,6 +254,14 @@ export const waterPlant = async (plantId: string) => {
     }
   }
 
+  // 연속 물주기에 따른 추가 경험치
+  const streakBonusExperience = Math.min(5, wateringStreak); // 최대 5일까지 보너스 경험치
+  const totalExperienceGain = experienceGain + streakBonusExperience;
+  
+  // 새로운 경험치 계산
+  const newExperience = plant.experience + totalExperienceGain;
+  const canGrow = newExperience >= plant.experienceToGrow;
+
   // 트랜잭션으로 물주기 처리
   const result = await prisma.$transaction(async (prisma) => {
     // 물주기 로그 생성
@@ -243,6 +279,8 @@ export const waterPlant = async (plantId: string) => {
       data: {
         health: plant.health + healthGain,
         lastWatered: today,
+        experience: newExperience,
+        canGrow
       }
     });
 
@@ -267,6 +305,55 @@ export const waterPlant = async (plantId: string) => {
 };
 
 /**
+ * 경험치 요구량 계산
+ */
+const calculateNextExperienceRequirement = (plant: any) => {
+  // 식물 난이도에 따른 기본 경험치 설정
+  const baseExperience = 10;
+  const difficultyMultiplier = 
+    plant.plantType.difficulty === 'EASY' ? 1 :
+    plant.plantType.difficulty === 'MEDIUM' ? 1.5 :
+    plant.plantType.difficulty === 'HARD' ? 2 : 1;
+  
+  // 성장 단계에 따라 경험치 증가
+  const stageMultiplier = 1 + (plant.currentStage * 0.5);
+  
+  // 다음 단계 경험치 요구량
+  return Math.round(baseExperience * difficultyMultiplier * stageMultiplier);
+};
+
+/**
+ * 약속 완료로 경험치 추가
+ */
+export const addExperienceToPlant = async (plantId: string, experienceAmount: number) => {
+  const plant = await prisma.plant.findUnique({
+    where: { id: plantId },
+    include: { plantType: true }
+  });
+  
+  if (!plant) {
+    throw new ApiError('식물을 찾을 수 없습니다.', 404);
+  }
+  
+  if (plant.isCompleted) {
+    throw new ApiError('이미 완료된 식물입니다.', 400);
+  }
+  
+  // 경험치 계산
+  const newExperience = plant.experience + experienceAmount;
+  const canGrow = newExperience >= plant.experienceToGrow;
+  
+  // 식물 업데이트
+  return prisma.plant.update({
+    where: { id: plantId },
+    data: {
+      experience: newExperience,
+      canGrow
+    }
+  });
+};
+
+/**
  * 식물 성장 단계 올리기
  */
 export const advancePlantStage = async (plantId: string) => {
@@ -284,6 +371,11 @@ export const advancePlantStage = async (plantId: string) => {
 
   if (plant.isCompleted) {
     throw new ApiError('이미 완료된 식물입니다.', 400);
+  }
+  
+  // 성장 가능 여부 확인
+  if (!plant.canGrow) {
+    throw new ApiError('아직 성장할 수 없습니다. 약속을 더 완료하고 물을 주어 경험치를 모으세요.', 400);
   }
 
   // 최대 성장 단계 확인
@@ -324,11 +416,17 @@ export const advancePlantStage = async (plantId: string) => {
     };
   }
 
+  // 다음 단계 경험치 요구량 계산
+  const nextExperienceToGrow = calculateNextExperienceRequirement(plant);
+
   // 다음 단계로 성장
   const updatedPlant = await prisma.plant.update({
     where: { id: plant.id },
     data: {
-      currentStage: plant.currentStage + 1
+      currentStage: plant.currentStage + 1,
+      experience: 0, // 경험치 초기화
+      experienceToGrow: nextExperienceToGrow,
+      canGrow: false // 성장 후 다시 경험치를 모아야 함
     }
   });
 
@@ -390,86 +488,86 @@ export const getPlantCollection = async (childId: string) => {
  * 식물 건강 감소 처리 (스케줄러용)
  */
 export const decreasePlantHealth = async () => {
-    // 현재 진행 중인 모든 식물 조회
-    const activePlants = await prisma.plant.findMany({
-      where: {
-        isCompleted: false
-      }
-    });
-  
-    const today = new Date();
-    
-    // 명시적으로 타입 선언
-    interface PlantHealthUpdate {
-      plantId: string;
-      previousHealth: number;
-      newHealth: number;
-      daysSinceLastWatered: number;
+  // 현재 진행 중인 모든 식물 조회
+  const activePlants = await prisma.plant.findMany({
+    where: {
+      isCompleted: false
     }
-    
-    const results: PlantHealthUpdate[] = [];
+  });
+
+  const today = new Date();
   
-    // 각 식물의 건강 감소 처리
-    for (const plant of activePlants) {
-      const lastWatered = new Date(plant.lastWatered);
-      const daysSinceLastWatered = Math.floor((today.getTime() - lastWatered.getTime()) / (1000 * 60 * 60 * 24));
+  // 명시적으로 타입 선언
+  interface PlantHealthUpdate {
+    plantId: string;
+    previousHealth: number;
+    newHealth: number;
+    daysSinceLastWatered: number;
+  }
+  
+  const results: PlantHealthUpdate[] = [];
+
+  // 각 식물의 건강 감소 처리
+  for (const plant of activePlants) {
+    const lastWatered = new Date(plant.lastWatered);
+    const daysSinceLastWatered = Math.floor((today.getTime() - lastWatered.getTime()) / (1000 * 60 * 60 * 24));
+    
+    // 물주기를 3일 이상 안했으면 건강 감소
+    if (daysSinceLastWatered >= 3) {
+      // 일수에 비례해 건강 감소 (3일부터 하루당 5씩 감소)
+      const healthDecrease = Math.min(plant.health, 5 * (daysSinceLastWatered - 2));
       
-      // 물주기를 3일 이상 안했으면 건강 감소
-      if (daysSinceLastWatered >= 3) {
-        // 일수에 비례해 건강 감소 (3일부터 하루당 5씩 감소)
-        const healthDecrease = Math.min(plant.health, 5 * (daysSinceLastWatered - 2));
-        
-        // 건강이 0 이하면 식물 시들 위험
-        const updatedHealth = Math.max(0, plant.health - healthDecrease);
-        
-        // 식물 상태 업데이트
-        const updatedPlant = await prisma.plant.update({
-          where: { id: plant.id },
-          data: {
-            health: updatedHealth
-          }
-        });
-        
-        // 건강이 30% 이하면 알림 생성
-        if (updatedHealth <= 30) {
-          try {
-            // 자녀 정보 조회
-            const childProfile = await prisma.childProfile.findUnique({
-              where: { id: plant.childId },
-              include: {
-                user: true
+      // 건강이 0 이하면 식물 시들 위험
+      const updatedHealth = Math.max(0, plant.health - healthDecrease);
+      
+      // 식물 상태 업데이트
+      const updatedPlant = await prisma.plant.update({
+        where: { id: plant.id },
+        data: {
+          health: updatedHealth
+        }
+      });
+      
+      // 건강이 30% 이하면 알림 생성
+      if (updatedHealth <= 30) {
+        try {
+          // 자녀 정보 조회
+          const childProfile = await prisma.childProfile.findUnique({
+            where: { id: plant.childId },
+            include: {
+              user: true
+            }
+          });
+          
+          if (childProfile && childProfile.user) {
+            // 알림 생성
+            await prisma.notification.create({
+              data: {
+                userId: childProfile.user.id,
+                title: '식물이 물이 필요해요!',
+                content: `${plant.name || '식물'}의 건강이 좋지 않아요. 어서 물을 줘야 해요!`,
+                notificationType: 'SYSTEM',
+                relatedId: plant.id,
+                isRead: false
               }
             });
-            
-            if (childProfile && childProfile.user) {
-              // 알림 생성
-              await prisma.notification.create({
-                data: {
-                  userId: childProfile.user.id,
-                  title: '식물이 물이 필요해요!',
-                  content: `${plant.name || '식물'}의 건강이 좋지 않아요. 어서 물을 줘야 해요!`,
-                  notificationType: 'SYSTEM',
-                  relatedId: plant.id,
-                  isRead: false
-                }
-              });
-            }
-          } catch (error) {
-            console.error('알림 생성 실패:', error);
           }
+        } catch (error) {
+          console.error('알림 생성 실패:', error);
         }
-        
-        results.push({
-          plantId: plant.id,
-          previousHealth: plant.health,
-          newHealth: updatedHealth,
-          daysSinceLastWatered
-        });
       }
+      
+      results.push({
+        plantId: plant.id,
+        previousHealth: plant.health,
+        newHealth: updatedHealth,
+        daysSinceLastWatered
+      });
     }
-  
-    return results;
-  };
+  }
+
+  return results;
+};
 
 /**
  * 식물 유형 추가 (관리자용)
@@ -498,5 +596,6 @@ export default {
   advancePlantStage,
   getPlantCollection,
   decreasePlantHealth,
-  createPlantType
+  createPlantType,
+  addExperienceToPlant
 };

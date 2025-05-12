@@ -1,7 +1,13 @@
 import { prisma } from '../../app';
 import { ApiError } from '../../middleware/error.middleware';
-import { PromiseTask, PromiseAssignment, PromiseStatus, RepeatType } from '@prisma/client';
+import {
+  PromiseTask,
+  PromiseAssignment,
+  PromiseStatus,
+  RepeatType,
+} from '@prisma/client';
 import { addDays, addMonths, addWeeks, format } from 'date-fns';
+import * as plantService from '../plant/plant.service';
 
 /**
  * 부모 프로필 ID 조회
@@ -10,9 +16,9 @@ const getParentProfileId = async (userId: string): Promise<string> => {
   const parentProfile = await prisma.parentProfile.findFirst({
     where: {
       user: {
-        id: userId
-      }
-    }
+        id: userId,
+      },
+    },
   });
 
   if (!parentProfile) {
@@ -29,9 +35,9 @@ const getChildProfileId = async (userId: string): Promise<string> => {
   const childProfile = await prisma.childProfile.findFirst({
     where: {
       user: {
-        id: userId
-      }
-    }
+        id: userId,
+      },
+    },
   });
 
   if (!childProfile) {
@@ -51,7 +57,7 @@ export const createPromise = async (
   repeatType: RepeatType,
   startDate: Date,
   endDate: Date | null,
-  childIds: string[]
+  childIds: string[],
 ) => {
   // 부모 프로필 ID 조회
   const parentProfileId = await getParentProfileId(userId);
@@ -61,9 +67,9 @@ export const createPromise = async (
     where: {
       parentId: parentProfileId,
       childId: {
-        in: childIds
-      }
-    }
+        in: childIds,
+      },
+    },
   });
 
   if (connections.length !== childIds.length) {
@@ -80,13 +86,20 @@ export const createPromise = async (
         repeatType,
         startDate,
         endDate,
-        createdBy: parentProfileId
-      }
+        createdBy: parentProfileId,
+      },
     });
 
     // 각 자녀에게 약속 할당
     for (const childId of childIds) {
-      await createPromiseAssignments(prisma, promise, childId, startDate, endDate, repeatType);
+      await createPromiseAssignments(
+        prisma,
+        promise,
+        childId,
+        startDate,
+        endDate,
+        repeatType,
+      );
     }
 
     return promise;
@@ -102,7 +115,7 @@ const createPromiseAssignments = async (
   childId: string,
   startDate: Date,
   endDate: Date | null,
-  repeatType: RepeatType
+  repeatType: RepeatType,
 ) => {
   const assignments: Partial<PromiseAssignment>[] = [];
 
@@ -112,7 +125,7 @@ const createPromiseAssignments = async (
       promiseId: promise.id,
       childId,
       dueDate: startDate,
-      status: PromiseStatus.PENDING
+      status: PromiseStatus.PENDING,
     });
   } else {
     // 반복 약속의 경우 (매일, 매주, 매월)
@@ -124,7 +137,7 @@ const createPromiseAssignments = async (
         promiseId: promise.id,
         childId,
         dueDate: new Date(currentDate),
-        status: PromiseStatus.PENDING
+        status: PromiseStatus.PENDING,
       });
 
       // 반복 유형에 따라 다음 날짜 계산
@@ -145,7 +158,7 @@ const createPromiseAssignments = async (
   // 할당 데이터 저장
   for (const assignment of assignments) {
     await prisma.promiseAssignment.create({
-      data: assignment as any
+      data: assignment as any,
     });
   }
 
@@ -156,18 +169,21 @@ const createPromiseAssignments = async (
       title: '새로운 약속이 생성되었습니다',
       content: `'${promise.title}' 약속이 부모님에 의해 생성되었습니다.`,
       notificationType: 'PROMISE_CREATED',
-      relatedId: promise.id
-    }
+      relatedId: promise.id,
+    },
   });
 };
 
 /**
  * 자녀 프로필 ID로 사용자 ID 조회 (내부 함수)
  */
-const getUserIdFromChildProfileId = async (prisma: any, childProfileId: string): Promise<string> => {
+const getUserIdFromChildProfileId = async (
+  prisma: any,
+  childProfileId: string,
+): Promise<string> => {
   const childProfile = await prisma.childProfile.findUnique({
     where: { id: childProfileId },
-    select: { userId: true }
+    select: { userId: true },
   });
 
   if (!childProfile) {
@@ -185,7 +201,7 @@ export const getParentChildren = async (userId: string) => {
 
   return await prisma.childParentConnection.findMany({
     where: {
-      parentId: parentProfileId
+      parentId: parentProfileId,
     },
     include: {
       child: {
@@ -194,12 +210,12 @@ export const getParentChildren = async (userId: string) => {
             select: {
               id: true,
               username: true,
-              profileImage: true
-            }
-          }
-        }
-      }
-    }
+              profileImage: true,
+            },
+          },
+        },
+      },
+    },
   });
 };
 
@@ -211,7 +227,7 @@ export const getParentPromises = async (userId: string) => {
 
   return await prisma.promiseTask.findMany({
     where: {
-      createdBy: parentProfileId
+      createdBy: parentProfileId,
     },
     include: {
       assignments: {
@@ -220,28 +236,31 @@ export const getParentPromises = async (userId: string) => {
             include: {
               user: {
                 select: {
-                  username: true
-                }
-              }
-            }
-          }
-        }
-      }
+                  username: true,
+                },
+              },
+            },
+          },
+        },
+      },
     },
     orderBy: {
-      createdAt: 'desc'
-    }
+      createdAt: 'desc',
+    },
   });
 };
 
 /**
  * 자녀의 약속 목록 조회
  */
-export const getChildPromises = async (userId: string, status?: PromiseStatus) => {
+export const getChildPromises = async (
+  userId: string,
+  status?: PromiseStatus,
+) => {
   const childProfileId = await getChildProfileId(userId);
 
   const where: any = {
-    childId: childProfileId
+    childId: childProfileId,
   };
 
   if (status) {
@@ -251,11 +270,11 @@ export const getChildPromises = async (userId: string, status?: PromiseStatus) =
   return await prisma.promiseAssignment.findMany({
     where,
     include: {
-      promise: true
+      promise: true,
     },
     orderBy: {
-      dueDate: 'asc'
-    }
+      dueDate: 'asc',
+    },
   });
 };
 
@@ -266,7 +285,7 @@ export const getPromiseById = async (promiseId: string, userId: string) => {
   // 부모 또는 자녀 프로필 ID 조회
   const user = await prisma.user.findUnique({
     where: { id: userId },
-    select: { userType: true }
+    select: { userType: true },
   });
 
   if (!user) {
@@ -280,10 +299,10 @@ export const getPromiseById = async (promiseId: string, userId: string) => {
         include: {
           user: {
             select: {
-              username: true
-            }
-          }
-        }
+              username: true,
+            },
+          },
+        },
       },
       assignments: {
         include: {
@@ -291,14 +310,14 @@ export const getPromiseById = async (promiseId: string, userId: string) => {
             include: {
               user: {
                 select: {
-                  username: true
-                }
-              }
-            }
-          }
-        }
-      }
-    }
+                  username: true,
+                },
+              },
+            },
+          },
+        },
+      },
+    },
   });
 
   if (!promise) {
@@ -314,9 +333,9 @@ export const getPromiseById = async (promiseId: string, userId: string) => {
   } else if (user.userType === 'CHILD') {
     const childProfileId = await getChildProfileId(userId);
     const hasAssignment = promise.assignments.some(
-      assignment => assignment.childId === childProfileId
+      (assignment) => assignment.childId === childProfileId,
     );
-    
+
     if (!hasAssignment) {
       throw new ApiError('이 약속에 대한 접근 권한이 없습니다.', 403);
     }
@@ -338,7 +357,7 @@ export const updatePromise = async (
     startDate?: Date;
     endDate?: Date | null;
     childIds?: string[];
-  }
+  },
 ) => {
   const parentProfileId = await getParentProfileId(userId);
 
@@ -346,8 +365,8 @@ export const updatePromise = async (
   const promise = await prisma.promiseTask.findUnique({
     where: { id: promiseId },
     include: {
-      assignments: true
-    }
+      assignments: true,
+    },
   });
 
   if (!promise) {
@@ -364,26 +383,27 @@ export const updatePromise = async (
       where: { id: promiseId },
       data: {
         title: updateData.title || undefined,
-        description: 'description' in updateData ? updateData.description : undefined,
+        description:
+          'description' in updateData ? updateData.description : undefined,
         repeatType: updateData.repeatType || undefined,
         startDate: updateData.startDate || undefined,
-        endDate: 'endDate' in updateData ? updateData.endDate : undefined
-      }
+        endDate: 'endDate' in updateData ? updateData.endDate : undefined,
+      },
     });
 
     // 자녀 정보가 변경된 경우
     if (updateData.childIds) {
       // 현재 할당된 자녀 목록
-      const currentChildIds = promise.assignments.map(a => a.childId);
-      
+      const currentChildIds = promise.assignments.map((a) => a.childId);
+
       // 새로 추가할 자녀
       const childIdsToAdd = updateData.childIds.filter(
-        id => !currentChildIds.includes(id)
+        (id) => !currentChildIds.includes(id),
       );
-      
+
       // 제거할 자녀
       const childIdsToRemove = currentChildIds.filter(
-        id => !updateData.childIds!.includes(id)
+        (id) => !updateData.childIds!.includes(id),
       );
 
       // 제거할 자녀의 할당 삭제
@@ -392,25 +412,28 @@ export const updatePromise = async (
           where: {
             promiseId,
             childId: {
-              in: childIdsToRemove
-            }
-          }
+              in: childIdsToRemove,
+            },
+          },
         });
       }
 
       // 새로 추가할 자녀에게 약속 할당
       for (const childId of childIdsToAdd) {
         const updateStartDate = updateData.startDate || promise.startDate;
-        const updateEndDate = updateData.endDate !== undefined ? updateData.endDate : promise.endDate;
+        const updateEndDate =
+          updateData.endDate !== undefined
+            ? updateData.endDate
+            : promise.endDate;
         const updateRepeatType = updateData.repeatType || promise.repeatType;
-        
+
         await createPromiseAssignments(
           prisma,
           promise,
           childId,
           updateStartDate,
           updateEndDate,
-          updateRepeatType
+          updateRepeatType,
         );
       }
     }
@@ -427,7 +450,7 @@ export const deletePromise = async (promiseId: string, userId: string) => {
 
   // 약속 존재 및 소유 확인
   const promise = await prisma.promiseTask.findUnique({
-    where: { id: promiseId }
+    where: { id: promiseId },
   });
 
   if (!promise) {
@@ -443,22 +466,22 @@ export const deletePromise = async (promiseId: string, userId: string) => {
     // 관련 알림 삭제
     await prisma.notification.deleteMany({
       where: {
-        relatedId: promiseId
-      }
+        relatedId: promiseId,
+      },
     });
 
     // 약속 할당 삭제
     await prisma.promiseAssignment.deleteMany({
       where: {
-        promiseId
-      }
+        promiseId,
+      },
     });
 
     // 약속 삭제
     return await prisma.promiseTask.delete({
       where: {
-        id: promiseId
-      }
+        id: promiseId,
+      },
     });
   });
 };
@@ -469,7 +492,7 @@ export const deletePromise = async (promiseId: string, userId: string) => {
 export const submitVerification = async (
   promiseAssignmentId: string,
   userId: string,
-  imagePath: string
+  imagePath: string,
 ) => {
   const childProfileId = await getChildProfileId(userId);
 
@@ -486,16 +509,16 @@ export const submitVerification = async (
                 include: {
                   user: {
                     select: {
-                      id: true
-                    }
-                  }
-                }
-              }
-            }
-          }
-        }
-      }
-    }
+                      id: true,
+                    },
+                  },
+                },
+              },
+            },
+          },
+        },
+      },
+    },
   });
 
   if (!promiseAssignment) {
@@ -518,13 +541,15 @@ export const submitVerification = async (
       data: {
         status: PromiseStatus.SUBMITTED,
         verificationImage: imagePath,
-        verificationTime: new Date()
-      }
+        verificationTime: new Date(),
+      },
     });
 
     // 부모에게 알림 생성
-    const parentUserIds = promiseAssignment.child.parents.map(p => p.parent.user.id);
-    
+    const parentUserIds = promiseAssignment.child.parents.map(
+      (p) => p.parent.user.id,
+    );
+
     for (const parentUserId of parentUserIds) {
       await prisma.notification.create({
         data: {
@@ -532,8 +557,8 @@ export const submitVerification = async (
           title: '약속 인증 요청',
           content: `${promiseAssignment.promise.title} 약속에 대한 인증 요청이 있습니다.`,
           notificationType: 'PROMISE_VERIFIED',
-          relatedId: promiseAssignmentId
-        }
+          relatedId: promiseAssignmentId,
+        },
       });
     }
 
@@ -550,9 +575,13 @@ export const respondToVerification = async (
   promiseAssignmentId: string,
   userId: string,
   approved: boolean,
-  rejectionReason?: string
+  rejectionReason?: string,
 ) => {
   const parentProfileId = await getParentProfileId(userId);
+
+  // 응답 객체 초기화
+  let experienceGained = 0;
+  let updatedAssignment;
 
   // 약속 할당 확인
   const promiseAssignment = await prisma.promiseAssignment.findUnique({
@@ -564,13 +593,13 @@ export const respondToVerification = async (
           user: {
             select: {
               id: true,
-              username: true
-            }
+              username: true,
+            },
           },
-          parents: true
-        }
-      }
-    }
+          parents: true,
+        },
+      },
+    },
   });
 
   if (!promiseAssignment) {
@@ -581,8 +610,8 @@ export const respondToVerification = async (
   const hasRelationship = await prisma.childParentConnection.findFirst({
     where: {
       childId: promiseAssignment.childId,
-      parentId: parentProfileId
-    }
+      parentId: parentProfileId,
+    },
   });
 
   if (!hasRelationship) {
@@ -600,8 +629,8 @@ export const respondToVerification = async (
       data: {
         status: approved ? PromiseStatus.APPROVED : PromiseStatus.REJECTED,
         rejectionReason: approved ? null : rejectionReason,
-        completedAt: approved ? new Date() : null
-      }
+        completedAt: approved ? new Date() : null,
+      },
     });
 
     // 자녀에게 알림 생성
@@ -613,30 +642,107 @@ export const respondToVerification = async (
           ? `${promiseAssignment.promise.title} 약속 인증이 승인되었습니다. 축하합니다!`
           : `${promiseAssignment.promise.title} 약속 인증이 거절되었습니다. 사유: ${rejectionReason}`,
         notificationType: approved ? 'PROMISE_APPROVED' : 'PROMISE_REJECTED',
-        relatedId: promiseAssignmentId
-      }
+        relatedId: promiseAssignmentId,
+      },
     });
 
-    // 승인된 경우 스티커 부여
+    // 승인된 경우 스티커 부여 및 식물 경험치 추가
     if (approved) {
+      // 스티커 생성
       const sticker = await prisma.sticker.create({
         data: {
           childId: promiseAssignment.childId,
           title: `${promiseAssignment.promise.title} 완료`,
-          description: `${format(new Date(), 'yyyy-MM-dd')}에 ${promiseAssignment.promise.title} 약속을 완료했어요!`,
-          imageUrl: '/stickers/default-star.png', // 기본 스티커 이미지
-          createdAt: new Date()
-        }
+          description: `${format(new Date(), 'yyyy-MM-dd')}에 ${
+            promiseAssignment.promise.title
+          } 약속을 완료했어요!`,
+          imageUrl:
+            'https://growpromise-uploads.s3.ap-northeast-2.amazonaws.com/promise-verifications/0d4dce8b-b578-4105-95fd-29393af7bca2.png', // 기본 스티커 이미지
+          createdAt: new Date(),
+        },
       });
+
+      // 현재 키우고 있는 식물 조회
+      const childProfile = await prisma.childProfile.findUnique({
+        where: { id: promiseAssignment.childId },
+        include: {
+          plants: {
+            where: {
+              isCompleted: false,
+            },
+            orderBy: {
+              startedAt: 'desc',
+            },
+            take: 1,
+          },
+        },
+      });
+
+      // 현재 키우고 있는 식물이 있으면 경험치 추가
+      if (childProfile && childProfile.plants.length > 0) {
+        const currentPlant = childProfile.plants[0];
+
+        // 약속 유형에 따른 경험치 차등 지급
+        experienceGained = 10; // 기본 값
+
+        switch (promiseAssignment.promise.repeatType) {
+          case RepeatType.DAILY:
+            experienceGained = 5; // 매일 반복되는 약속은 적은 경험치
+            break;
+          case RepeatType.WEEKLY:
+            experienceGained = 10; // 주간 약속은 기본 경험치
+            break;
+          case RepeatType.MONTHLY:
+            experienceGained = 15; // 월간 약속은 높은 경험치
+            break;
+          case RepeatType.ONCE:
+            experienceGained = 20; // 일회성 약속은 가장 높은 경험치
+            break;
+        }
+
+        try {
+          // 식물 업데이트
+          const updatedPlant = await prisma.plant.update({
+            where: { id: currentPlant.id },
+            data: {
+              experience: currentPlant.experience + experienceGained,
+              canGrow:
+                currentPlant.experience + experienceGained >=
+                currentPlant.experienceToGrow,
+            },
+          });
+
+          // 식물이 성장 가능한 상태가 되었다면 알림 생성
+          if (updatedPlant.canGrow) {
+            await prisma.notification.create({
+              data: {
+                userId: promiseAssignment.child.user.id,
+                title: '식물이 성장할 준비가 되었어요!',
+                content: `${
+                  updatedPlant.name || '식물'
+                }에게 충분한 경험치가 모였어요. 성장시켜 보세요!`,
+                notificationType: 'SYSTEM',
+                relatedId: updatedPlant.id,
+              },
+            });
+          }
+        } catch (error) {
+          console.error('식물 업데이트 오류:', error);
+          // 오류가 발생해도 전체 트랜잭션을 실패하지 않도록 무시
+        }
+      }
 
       // 캐릭터 성장 단계 업데이트 로직
       await updateCharacterStage(prisma, promiseAssignment.childId);
     }
 
-    return updatedAssignment;
+    // 응답 객체 반환 (경험치 정보 포함)
+    return {
+      promiseAssignment: updatedAssignment,
+      experienceGained: approved ? experienceGained : 0,
+    };
   });
 };
-
 /**
  * 캐릭터 성장 단계 업데이트 (내부 함수)
  */
@@ -645,20 +751,20 @@ const updateCharacterStage = async (prisma: any, childId: string) => {
   const completedPromisesCount = await prisma.promiseAssignment.count({
     where: {
       childId,
-      status: PromiseStatus.APPROVED
-    }
+      status: PromiseStatus.APPROVED,
+    },
   });
-  
+
   // 받은 스티커 수 계산
   const stickersCount = await prisma.sticker.count({
     where: {
-      childId
-    }
+      childId,
+    },
   });
 
   // 성장 단계 결정 (성장 단계는 1~5까지)
   let newStage = 1;
-  
+
   if (completedPromisesCount >= 20 && stickersCount >= 20) {
     newStage = 5;
   } else if (completedPromisesCount >= 15 && stickersCount >= 15) {
@@ -672,20 +778,20 @@ const updateCharacterStage = async (prisma: any, childId: string) => {
   // 현재 단계 조회
   const childProfile = await prisma.childProfile.findUnique({
     where: { id: childId },
-    select: { characterStage: true }
+    select: { characterStage: true },
   });
 
   // 성장 단계가 높아진 경우만 업데이트
   if (childProfile && newStage > childProfile.characterStage) {
     await prisma.childProfile.update({
       where: { id: childId },
-      data: { characterStage: newStage }
+      data: { characterStage: newStage },
     });
 
     // 자녀에게 캐릭터 성장 알림
     const child = await prisma.childProfile.findUnique({
       where: { id: childId },
-      select: { userId: true }
+      select: { userId: true },
     });
 
     if (child) {
@@ -695,8 +801,8 @@ const updateCharacterStage = async (prisma: any, childId: string) => {
           title: '식물이 자랐어요!',
           content: `축하합니다! 약속을 성실히 지켜서 식물이 ${newStage}단계로 성장했어요!`,
           notificationType: 'SYSTEM',
-          relatedId: null
-        }
+          relatedId: null,
+        },
       });
     }
   }
@@ -711,22 +817,22 @@ export const getPendingVerifications = async (userId: string) => {
   // 부모와 연결된 자녀 목록 조회
   const children = await prisma.childParentConnection.findMany({
     where: {
-      parentId: parentProfileId
+      parentId: parentProfileId,
     },
     select: {
-      childId: true
-    }
+      childId: true,
+    },
   });
 
-  const childIds = children.map(child => child.childId);
+  const childIds = children.map((child) => child.childId);
 
   // 자녀들의 승인 대기 중인 약속 인증 조회
   return await prisma.promiseAssignment.findMany({
     where: {
       childId: {
-        in: childIds
+        in: childIds,
       },
-      status: PromiseStatus.SUBMITTED
+      status: PromiseStatus.SUBMITTED,
     },
     include: {
       promise: true,
@@ -735,15 +841,15 @@ export const getPendingVerifications = async (userId: string) => {
           user: {
             select: {
               username: true,
-              profileImage: true
-            }
-          }
-        }
-      }
+              profileImage: true,
+            },
+          },
+        },
+      },
     },
     orderBy: {
-      verificationTime: 'desc'
-    }
+      verificationTime: 'desc',
+    },
   });
 };
 
@@ -756,16 +862,16 @@ export const getChildPromiseStats = async (userId: string) => {
   // 전체 약속 수
   const totalPromises = await prisma.promiseAssignment.count({
     where: {
-      childId: childProfileId
-    }
+      childId: childProfileId,
+    },
   });
 
   // 완료된 약속 수
   const completedPromises = await prisma.promiseAssignment.count({
     where: {
       childId: childProfileId,
-      status: PromiseStatus.APPROVED
-    }
+      status: PromiseStatus.APPROVED,
+    },
   });
 
   // 진행 중인 약속 수
@@ -773,22 +879,22 @@ export const getChildPromiseStats = async (userId: string) => {
     where: {
       childId: childProfileId,
       status: {
-        in: [PromiseStatus.PENDING, PromiseStatus.SUBMITTED]
-      }
-    }
+        in: [PromiseStatus.PENDING, PromiseStatus.SUBMITTED],
+      },
+    },
   });
 
   // 캐릭터 단계
   const childProfile = await prisma.childProfile.findUnique({
     where: { id: childProfileId },
-    select: { characterStage: true }
+    select: { characterStage: true },
   });
 
   // 스티커 수
   const stickerCount = await prisma.sticker.count({
     where: {
-      childId: childProfileId
-    }
+      childId: childProfileId,
+    },
   });
 
   return {
@@ -796,21 +902,24 @@ export const getChildPromiseStats = async (userId: string) => {
     completedPromises,
     pendingPromises,
     characterStage: childProfile?.characterStage || 1,
-    stickerCount
+    stickerCount,
   };
 };
 
 /**
  * 부모가 특정 자녀의 약속 과제 목록 조회
  */
-export const getPromiseAssignmentsByChild = async (childId: string, parentId: string) => {
+export const getPromiseAssignmentsByChild = async (
+  childId: string,
+  parentId: string,
+) => {
   // 부모-자녀 관계 확인
   const parentProfile = await prisma.parentProfile.findFirst({
     where: {
       user: {
-        id: parentId
-      }
-    }
+        id: parentId,
+      },
+    },
   });
 
   if (!parentProfile) {
@@ -821,8 +930,8 @@ export const getPromiseAssignmentsByChild = async (childId: string, parentId: st
   const connection = await prisma.childParentConnection.findFirst({
     where: {
       parentId: parentProfile.id,
-      childId
-    }
+      childId,
+    },
   });
 
   if (!connection) {
@@ -832,7 +941,7 @@ export const getPromiseAssignmentsByChild = async (childId: string, parentId: st
   // 약속 과제 목록 조회
   return await prisma.promiseAssignment.findMany({
     where: {
-      childId
+      childId,
     },
     include: {
       promise: true,
@@ -841,11 +950,11 @@ export const getPromiseAssignmentsByChild = async (childId: string, parentId: st
           user: {
             select: {
               username: true,
-              profileImage: true
-            }
-          }
-        }
-      }
-    }
+              profileImage: true,
+            },
+          },
+        },
+      },
+    },
   });
 };
