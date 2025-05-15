@@ -211,15 +211,16 @@ export const createChildAccount = async (
 export const loginUser = async (
   username: string,
   password: string,
-  userType: 'PARENT' | 'CHILD'
+  // userType: 'PARENT' | 'CHILD'
 ) => {
   // 사용자 찾기
   const user = await prisma.user.findFirst({
     where: {
       username,
-      userType: userType as UserType
     }
   });
+
+  const userType = user?.userType;
 
   if (!user) {
     throw new ApiError('사용자를 찾을 수 없습니다.', 404);

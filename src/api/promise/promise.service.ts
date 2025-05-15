@@ -648,19 +648,19 @@ export const respondToVerification = async (
 
     // 승인된 경우 스티커 부여 및 식물 경험치 추가
     if (approved) {
-      // 스티커 생성
-      const sticker = await prisma.sticker.create({
-        data: {
-          childId: promiseAssignment.childId,
-          title: `${promiseAssignment.promise.title} 완료`,
-          description: `${format(new Date(), 'yyyy-MM-dd')}에 ${
-            promiseAssignment.promise.title
-          } 약속을 완료했어요!`,
-          imageUrl:
-            'https://growpromise-uploads.s3.ap-northeast-2.amazonaws.com/promise-verifications/0d4dce8b-b578-4105-95fd-29393af7bca2.png', // 기본 스티커 이미지
-          createdAt: new Date(),
-        },
-      });
+      // 스티커 생성 프론트에서 스티커 주는 걸로
+      // const sticker = await prisma.sticker.create({
+      //   data: {
+      //     childId: promiseAssignment.childId,
+      //     title: `${promiseAssignment.promise.title} 완료`,
+      //     description: `${format(new Date(), 'yyyy-MM-dd')}에 ${
+      //       promiseAssignment.promise.title
+      //     } 약속을 완료했어요!`,
+      //     imageUrl:
+      //       'https://growpromise-uploads.s3.ap-northeast-2.amazonaws.com/promise-verifications/0d4dce8b-b578-4105-95fd-29393af7bca2.png', // 기본 스티커 이미지
+      //     createdAt: new Date(),
+      //   },
+      // });
 
       // 현재 키우고 있는 식물 조회
       const childProfile = await prisma.childProfile.findUnique({

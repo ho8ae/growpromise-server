@@ -40,9 +40,9 @@ export const childSignup = asyncHandler(async (req: Request, res: Response) => {
  * @route POST /api/auth/login
  */
 export const login = asyncHandler(async (req: Request, res: Response) => {
-  const { username, password, userType } = req.body;
+  const { username, password } = req.body;
   
-  const result = await authService.loginUser(username, password, userType);
+  const result = await authService.loginUser(username, password);
   
   res.status(200).json({
     success: true,

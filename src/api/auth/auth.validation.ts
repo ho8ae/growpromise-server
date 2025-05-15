@@ -10,11 +10,11 @@ export const loginSchema = Joi.object({
     'string.empty': '비밀번호는 필수입니다.',
     'any.required': '비밀번호는 필수입니다.'
   }),
-  userType: Joi.string().valid('PARENT', 'CHILD').required().messages({
-    'string.empty': '사용자 유형은 필수입니다.',
-    'any.required': '사용자 유형은 필수입니다.',
-    'any.only': '사용자 유형은 PARENT 또는 CHILD만 가능합니다.'
-  })
+  // userType: Joi.string().valid('PARENT', 'CHILD').required().messages({
+  //   'string.empty': '사용자 유형은 필수입니다.',
+  //   'any.required': '사용자 유형은 필수입니다.',
+  //   'any.only': '사용자 유형은 PARENT 또는 CHILD만 가능합니다.'
+  // })
 });
 
 // 부모 회원가입 유효성 검사 스키마
