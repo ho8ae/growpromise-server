@@ -64,3 +64,12 @@ export const growPlantSchema = Joi.object({
     'any.required': '식물 ID는 필수입니다.'
   })
 });
+
+// 식물 뽑기 유효성 검사 스키마
+export const drawPlantSchema = Joi.object({
+  packType: Joi.string().valid('BASIC', 'PREMIUM', 'SPECIAL').required().messages({
+    'string.empty': '팩 타입은 필수입니다.',
+    'any.only': '팩 타입은 BASIC, PREMIUM, SPECIAL 중 하나여야 합니다.',
+    'any.required': '팩 타입은 필수입니다.'
+  })
+});

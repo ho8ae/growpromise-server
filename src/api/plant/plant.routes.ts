@@ -4,7 +4,8 @@ import { validate } from '../../middleware/validation.middleware';
 import { authenticate, requireParent, requireChild, checkParentChildRelationship } from '../../middleware/auth.middleware';
 import { 
   startPlantSchema, 
-  plantTypeSchema
+  plantTypeSchema,
+  drawPlantSchema
 } from './plant.validation';
 
 const router = express.Router();
@@ -25,5 +26,9 @@ router.get('/collection', authenticate, requireChild, plantController.getPlantCo
 router.get('/children/:childId/current', authenticate, requireParent, checkParentChildRelationship, plantController.getChildCurrentPlant);
 router.get('/children/:childId', authenticate, requireParent, checkParentChildRelationship, plantController.getChildPlants);
 router.get('/children/:childId/collection', authenticate, requireParent, checkParentChildRelationship, plantController.getChildPlantCollection);
+
+// 식물 뽑기 관련 라우트 추가
+router.post('/draw', authenticate, requireChild, validate(drawPlantSchema), plantController.drawRandomPlant);
+router.get('/inventory', authenticate, requireChild, plantController.getPlantInventory);
 
 export default router;

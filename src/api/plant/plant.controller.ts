@@ -304,6 +304,69 @@ export const createPlantType = asyncHandler(async (req: Request, res: Response) 
   });
 });
 
+/**
+ * 랜덤 식물 뽑기
+ * @route POST /api/plants/draw
+ */
+export const drawRandomPlant = asyncHandler(async (req: Request, res: Response) => {
+  if (!req.user) {
+    return res.status(401).json({
+      success: false,
+      message: '인증이 필요합니다.'
+    });
+  }
+  
+  const { packType } = req.body; // basic, premium, special 등의 팩 타입
+  
+  // 자녀 프로필 ID 가져오기
+  const childProfileId = req.user.profileId;
+  
+  if (!childProfileId) {
+    return res.status(400).json({
+      success: false,
+      message: '프로필 ID를 찾을 수 없습니다.'
+    });
+  }
+  
+  const drawResult = await plantService.drawRandomPlant(childProfileId, packType);
+  
+  res.status(200).json({
+    success: true,
+    message: '새로운 식물을 획득했습니다!',
+    data: drawResult
+  });
+});
+
+/**
+ * 소유한 식물 유형 목록 조회
+ * @route GET /api/plants/inventory
+ */
+export const getPlantInventory = asyncHandler(async (req: Request, res: Response) => {
+  if (!req.user) {
+    return res.status(401).json({
+      success: false,
+      message: '인증이 필요합니다.'
+    });
+  }
+  
+  // 자녀 프로필 ID 가져오기
+  const childProfileId = req.user.profileId;
+  
+  if (!childProfileId) {
+    return res.status(400).json({
+      success: false,
+      message: '프로필 ID를 찾을 수 없습니다.'
+    });
+  }
+  
+  const inventory = await plantService.getPlantInventory(childProfileId);
+  
+  res.status(200).json({
+    success: true,
+    data: inventory
+  });
+});
+
 export default {
   getAllPlantTypes,
   getPlantTypeById,

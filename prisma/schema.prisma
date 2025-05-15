@@ -24,6 +24,7 @@ model User {
   parentProfile ParentProfile?
   childProfile  ChildProfile?
   notifications Notification[]
+  userCoin UserCoin?
 }
 
 enum UserType {
@@ -62,6 +63,8 @@ model ChildProfile {
   stickers  Sticker[]
   plants    Plant[]
   rewards   RewardHistory[]
+  plantInventory PlantInventory[]
+  plantDrawHistory PlantDrawHistory[]
 }
 
 model ChildParentConnection {
@@ -185,12 +188,53 @@ model PlantType {
   difficulty       String    // EASY, MEDIUM, HARD
   category         String    // FLOWER, TREE, VEGETABLE, etc.
   unlockRequirement Int?     // 필요한 완료 식물 수
-  imagePrefix      String    // 이미지 경로 접두사
+  imagePrefix      String    // 이미지 경로 접두사 (S3 URL 구성에 사용)
+  rarity           String    @default("COMMON")  // COMMON, UNCOMMON, RARE, EPIC, LEGENDARY
   createdAt        DateTime  @default(now())
   
   // 관계
   plants           Plant[]
+  inventory        PlantInventory[]
+  drawHistory      PlantDrawHistory[]
 }
+
+// 유저 코인 모델
+model UserCoin {
+  id        String   @id @default(uuid())
+  userId    String   @unique
+  amount    Int      @default(0)
+  updatedAt DateTime @updatedAt
+  
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+}
+
+// 소유한 식물 유형 (인벤토리)
+model PlantInventory {
+  id          String   @id @default(uuid())
+  childId     String
+  plantTypeId String
+  acquiredAt  DateTime @default(now())
+  
+  child       ChildProfile @relation(fields: [childId], references: [id], onDelete: Cascade)
+  plantType   PlantType    @relation(fields: [plantTypeId], references: [id], onDelete: Cascade)
+  
+  @@unique([childId, plantTypeId])
+}
+
+// 식물 뽑기 히스토리
+model PlantDrawHistory {
+  id              String   @id @default(uuid())
+  childId         String
+  plantTypeId     String
+  packType        String   // BASIC, PREMIUM, SPECIAL
+  isDuplicate     Boolean  @default(false)
+  experienceGained Int?    // 중복일 경우 지급된 경험치
+  timestamp       DateTime @default(now())
+  
+  child           ChildProfile @relation(fields: [childId], references: [id], onDelete: Cascade)
+  plantType       PlantType    @relation(fields: [plantTypeId], references: [id], onDelete: Cascade)
+}
+
 
 // 사용자가 키우는 식물
 model Plant {
