@@ -213,7 +213,7 @@ export const submitVerification = asyncHandler(async (req: any, res: any) => {
     });
   }
 
-  const { promiseAssignmentId } = req.body;
+  const { promiseAssignmentId, verificationDescription } = req.body;
 
   // S3에 업로드된 이미지 URL 사용
   const imageUrl = req.fileUrl;
@@ -225,11 +225,12 @@ export const submitVerification = asyncHandler(async (req: any, res: any) => {
     });
   }
 
-  // 서비스 호출 시 이미지 URL 전달
+  // 서비스 호출 시 이미지 URL과 설명(선택 사항) 전달
   const result = await promiseService.submitVerification(
     promiseAssignmentId,
     req.user.id,
     imageUrl,
+    verificationDescription || null, // 설명이 없으면 null 처리
   );
 
   res.status(200).json({

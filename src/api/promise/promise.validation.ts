@@ -75,6 +75,10 @@ export const submitVerificationSchema = Joi.object({
     'string.empty': '약속 할당 ID는 필수입니다.',
     'any.required': '약속 할당 ID는 필수입니다.',
   }),
+  // 추가된 부분: 인증 시 설명 필드 (선택 사항)
+  verificationDescription: Joi.string().max(300).allow('').optional().messages({
+    'string.max': '인증 설명은 최대 300자까지 가능합니다.',
+  }),
 });
 
 // 약속 인증 승인/거절 유효성 검사 스키마

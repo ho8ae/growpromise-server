@@ -110,6 +110,7 @@ model PromiseAssignment {
   status      PromiseStatus @default(PENDING)
   verificationImage String?
   verificationTime  DateTime?
+  verificationDescription String? // 추가: 인증 설명 필드
   completedAt DateTime?
   rejectionReason String?
   
