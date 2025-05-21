@@ -1,3 +1,4 @@
+
 import express from 'express';
 import * as plantController from './plant.controller';
 import { validate } from '../../middleware/validation.middleware';
@@ -27,8 +28,11 @@ router.get('/children/:childId/current', authenticate, requireParent, checkParen
 router.get('/children/:childId', authenticate, requireParent, checkParentChildRelationship, plantController.getChildPlants);
 router.get('/children/:childId/collection', authenticate, requireParent, checkParentChildRelationship, plantController.getChildPlantCollection);
 
-// 식물 뽑기 관련 라우트 추가
+// 식물 뽑기 관련 라우트
 router.post('/draw', authenticate, requireChild, validate(drawPlantSchema), plantController.drawRandomPlant);
 router.get('/inventory', authenticate, requireChild, plantController.getPlantInventory);
+
+// 인벤토리에서 식물 제거 라우트 (새로 추가)
+router.delete('/inventory/:plantTypeId', authenticate, requireChild, plantController.removeFromInventory);
 
 export default router;

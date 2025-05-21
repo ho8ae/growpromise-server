@@ -367,6 +367,47 @@ export const getPlantInventory = asyncHandler(async (req: Request, res: Response
   });
 });
 
+
+/**
+ * 인벤토리에서 식물 제거
+ * @route DELETE /api/plants/inventory/:plantTypeId
+ */
+export const removeFromInventory = asyncHandler(async (req: Request, res: Response) => {
+  if (!req.user) {
+    return res.status(401).json({
+      success: false,
+      message: '인증이 필요합니다.'
+    });
+  }
+  
+  // 자녀 프로필 ID 가져오기
+  const childProfileId = req.user.profileId;
+  
+  if (!childProfileId) {
+    return res.status(400).json({
+      success: false,
+      message: '프로필 ID를 찾을 수 없습니다.'
+    });
+  }
+  
+  const { plantTypeId } = req.params;
+  
+  if (!plantTypeId) {
+    return res.status(400).json({
+      success: false,
+      message: '식물 유형 ID는 필수입니다.'
+    });
+  }
+  
+  const result = await plantService.removeFromInventory(childProfileId, plantTypeId);
+  
+  res.status(200).json({
+    success: true,
+    message: '인벤토리에서 식물이 제거되었습니다.',
+    data: result
+  });
+});
+
 export default {
   getAllPlantTypes,
   getPlantTypeById,

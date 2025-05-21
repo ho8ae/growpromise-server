@@ -46,6 +46,12 @@ export const plantTypeSchema = Joi.object({
   imagePrefix: Joi.string().required().messages({
     'string.empty': '이미지 접두사는 필수입니다.',
     'any.required': '이미지 접두사는 필수입니다.'
+  }),
+  rarity: Joi.string().valid('COMMON', 'UNCOMMON', 'RARE', 'EPIC', 'LEGENDARY').messages({
+    'any.only': '희귀도는 COMMON, UNCOMMON, RARE, EPIC, LEGENDARY 중 하나여야 합니다.'
+  }),
+  isBasic: Joi.boolean().messages({
+    'boolean.base': '기본 식물 여부는 boolean 타입이어야 합니다.'
   })
 });
 
@@ -73,3 +79,4 @@ export const drawPlantSchema = Joi.object({
     'any.required': '팩 타입은 필수입니다.'
   })
 });
+
