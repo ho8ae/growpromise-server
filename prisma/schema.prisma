@@ -25,6 +25,7 @@ model User {
   childProfile  ChildProfile?
   notifications Notification[]
   userCoin UserCoin?
+  galleryFavorites GalleryFavorite[]
 }
 
 enum UserType {
@@ -44,6 +45,7 @@ model ParentProfile {
   promises  PromiseTask[]  
   rewards   Reward[]
   rewardHistories RewardHistory[]
+  
 }
 
 model ChildProfile {
@@ -117,6 +119,8 @@ model PromiseAssignment {
   // 관계
   promise     PromiseTask  @relation(fields: [promiseId], references: [id], onDelete: Cascade) 
   child       ChildProfile @relation(fields: [childId], references: [id], onDelete: Cascade)
+  hiddenInGallery Boolean @default(false) // 갤러리에서 숨김 여부
+  favorites       GalleryFavorite[]
 }
 
 enum PromiseStatus {
@@ -191,6 +195,7 @@ model PlantType {
   unlockRequirement Int?     // 필요한 완료 식물 수
   imagePrefix      String    // 이미지 경로 접두사 (S3 URL 구성에 사용)
   rarity           String    @default("COMMON")  // COMMON, UNCOMMON, RARE, EPIC, LEGENDARY
+  isBasic          Boolean   @default(false)
   createdAt        DateTime  @default(now())
   
   // 관계
@@ -214,6 +219,7 @@ model PlantInventory {
   id          String   @id @default(uuid())
   childId     String
   plantTypeId String
+  quantity    Int      @default(1)
   acquiredAt  DateTime @default(now())
   
   child       ChildProfile @relation(fields: [childId], references: [id], onDelete: Cascade)
@@ -293,4 +299,20 @@ model RewardHistory {
   child       ChildProfile @relation(fields: [childId], references: [id], onDelete: Cascade)
   parent      ParentProfile @relation(fields: [parentId], references: [id], onDelete: Cascade)
   reward      Reward     @relation(fields: [rewardId], references: [id], onDelete: Cascade)
+}
+
+model GalleryFavorite {
+  id                 String           @id @default(uuid())
+  userId             String           // 즐겨찾기한 사용자 ID
+  promiseAssignmentId String          // 즐겨찾기한 약속 할당 ID
+  createdAt          DateTime         @default(now())
+  
+  // 관계
+  user              User             @relation(fields: [userId], references: [id], onDelete: Cascade)
+  promiseAssignment PromiseAssignment @relation(fields: [promiseAssignmentId], references: [id], onDelete: Cascade)
+  
+  // 인덱스
+  @@index([userId])
+  @@index([promiseAssignmentId])
+  @@unique([userId, promiseAssignmentId]) // 한 사용자가 동일한 이미지를 중복 즐겨찾기 방지
 }
