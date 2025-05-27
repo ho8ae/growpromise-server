@@ -3,11 +3,14 @@ import { ApiError } from '../../middleware/error.middleware';
 import { UserType } from '@prisma/client';
 
 /**
- * 프로필 정보 조회
+ * 기본 프로필 정보 조회
  */
 export const getUserProfile = async (userId: string) => {
   const user = await prisma.user.findUnique({
-    where: { id: userId },
+    where: { 
+      id: userId,
+      isActive: true 
+    },
     select: {
       id: true,
       username: true,
@@ -68,7 +71,86 @@ export const getUserProfile = async (userId: string) => {
 };
 
 /**
- * 프로필 정보 업데이트
+ * 소셜 로그인 정보 포함한 상세 프로필 조회
+ */
+export const getUserDetailProfile = async (userId: string) => {
+  const user = await prisma.user.findUnique({
+    where: { 
+      id: userId,
+      isActive: true
+    },
+    select: {
+      id: true,
+      username: true,
+      email: true,
+      userType: true,
+      profileImage: true,
+      phoneNumber: true,
+      bio: true,
+      socialProvider: true,
+      setupCompleted: true,
+      createdAt: true,
+      parentProfile: {
+        select: {
+          id: true,
+          connectionCode: true,
+          connectionCodeExpires: true,
+          children: {
+            select: {
+              child: {
+                select: {
+                  id: true,
+                  user: {
+                    select: {
+                      id: true,
+                      username: true,
+                      profileImage: true
+                    }
+                  }
+                }
+              }
+            }
+          }
+        }
+      },
+      childProfile: {
+        select: {
+          id: true,
+          birthDate: true,
+          characterStage: true,
+          totalCompletedPlants: true,
+          wateringStreak: true,
+          parents: {
+            select: {
+              parent: {
+                select: {
+                  id: true,
+                  user: {
+                    select: {
+                      id: true,
+                      username: true,
+                      profileImage: true,
+                      email: true
+                    }
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    }
+  });
+
+  if (!user) {
+    throw new ApiError('사용자를 찾을 수 없습니다.', 404);
+  }
+
+  return user;
+};
+
+/**
+ * 기본 프로필 정보 업데이트
  */
 export const updateUserProfile = async (
   userId: string,
@@ -80,7 +162,10 @@ export const updateUserProfile = async (
 ) => {
   // 사용자 존재 확인
   const user = await prisma.user.findUnique({
-    where: { id: userId },
+    where: { 
+      id: userId,
+      isActive: true 
+    },
     include: {
       childProfile: true
     }
@@ -95,7 +180,8 @@ export const updateUserProfile = async (
     const existingUser = await prisma.user.findFirst({
       where: {
         email: updateData.email,
-        id: { not: userId }
+        id: { not: userId },
+        isActive: true
       }
     });
 
@@ -111,7 +197,8 @@ export const updateUserProfile = async (
       where: { id: userId },
       data: {
         username: updateData.username || undefined,
-        email: updateData.email || undefined
+        email: updateData.email || undefined,
+        updatedAt: new Date()
       },
       select: {
         id: true,
@@ -138,12 +225,97 @@ export const updateUserProfile = async (
 };
 
 /**
+ * 확장된 프로필 정보 업데이트 (추가 필드 포함)
+ */
+export const updateUserDetailProfile = async (
+  userId: string,
+  updateData: {
+    username?: string;
+    email?: string;
+    phoneNumber?: string;
+    bio?: string;
+    birthDate?: Date | null;
+  }
+) => {
+  // 사용자 존재 확인
+  const user = await prisma.user.findUnique({
+    where: { 
+      id: userId,
+      isActive: true
+    },
+    include: {
+      childProfile: true
+    }
+  });
+
+  if (!user) {
+    throw new ApiError('사용자를 찾을 수 없습니다.', 404);
+  }
+
+  // 이메일 중복 확인
+  if (updateData.email && updateData.email !== user.email) {
+    const existingUser = await prisma.user.findFirst({
+      where: {
+        email: updateData.email,
+        id: { not: userId },
+        isActive: true
+      }
+    });
+
+    if (existingUser) {
+      throw new ApiError('이미 사용 중인 이메일입니다.', 400);
+    }
+  }
+
+  // 트랜잭션으로 프로필 업데이트
+  return await prisma.$transaction(async (prisma) => {
+    // 사용자 기본 정보 업데이트
+    const updatedUser = await prisma.user.update({
+      where: { id: userId },
+      data: {
+        username: updateData.username || undefined,
+        email: updateData.email || undefined,
+        phoneNumber: updateData.phoneNumber || undefined,
+        bio: updateData.bio || undefined,
+        updatedAt: new Date()
+      },
+      select: {
+        id: true,
+        username: true,
+        email: true,
+        userType: true,
+        profileImage: true,
+        phoneNumber: true,
+        bio: true,
+        socialProvider: true,
+        createdAt: true
+      }
+    });
+
+    // 자녀인 경우 생일 정보 업데이트
+    if (user.userType === UserType.CHILD && user.childProfile && 'birthDate' in updateData) {
+      await prisma.childProfile.update({
+        where: { id: user.childProfile.id },
+        data: {
+          birthDate: updateData.birthDate
+        }
+      });
+    }
+
+    return updatedUser;
+  });
+};
+
+/**
  * 프로필 이미지 업데이트
  */
 export const updateProfileImage = async (userId: string, imageUrl: string) => {
   // 사용자 존재 확인
   const user = await prisma.user.findUnique({
-    where: { id: userId }
+    where: { 
+      id: userId,
+      isActive: true 
+    }
   });
 
   if (!user) {
@@ -154,7 +326,8 @@ export const updateProfileImage = async (userId: string, imageUrl: string) => {
   return await prisma.user.update({
     where: { id: userId },
     data: {
-      profileImage: imageUrl
+      profileImage: imageUrl,
+      updatedAt: new Date()
     },
     select: {
       id: true,
@@ -172,7 +345,8 @@ export const getParentChildren = async (userId: string) => {
   const parentProfile = await prisma.parentProfile.findFirst({
     where: {
       user: {
-        id: userId
+        id: userId,
+        isActive: true
       }
     }
   });
@@ -210,7 +384,8 @@ export const getChildParents = async (userId: string) => {
   const childProfile = await prisma.childProfile.findFirst({
     where: {
       user: {
-        id: userId
+        id: userId,
+        isActive: true
       }
     }
   });
@@ -247,7 +422,10 @@ export const getChildParents = async (userId: string) => {
 export const getUserById = async (targetUserId: string, requesterId: string) => {
   // 요청자 확인
   const requester = await prisma.user.findUnique({
-    where: { id: requesterId },
+    where: { 
+      id: requesterId,
+      isActive: true 
+    },
     include: {
       parentProfile: true,
       childProfile: true
@@ -260,7 +438,10 @@ export const getUserById = async (targetUserId: string, requesterId: string) => 
 
   // 대상 사용자 확인
   const targetUser = await prisma.user.findUnique({
-    where: { id: targetUserId },
+    where: { 
+      id: targetUserId,
+      isActive: true 
+    },
     include: {
       parentProfile: true,
       childProfile: true
@@ -329,4 +510,45 @@ export const getUserById = async (targetUserId: string, requesterId: string) => 
       } : undefined
     }
   });
+};
+
+/**
+ * 사용자 계정 상태 조회 (소셜 로그인 정보 포함)
+ */
+export const getUserAccountStatus = async (userId: string) => {
+  const user = await prisma.user.findUnique({
+    where: { 
+      id: userId,
+      isActive: true
+    },
+    select: {
+      id: true,
+      username: true,
+      email: true,
+      userType: true,
+      socialProvider: true,
+      setupCompleted: true,
+      password: true,
+      createdAt: true,
+      isActive: true
+    }
+  });
+
+  if (!user) {
+    throw new ApiError('사용자를 찾을 수 없습니다.', 404);
+  }
+
+  return {
+    id: user.id,
+    username: user.username,
+    email: user.email,
+    userType: user.userType,
+    socialProvider: user.socialProvider,
+    setupCompleted: user.setupCompleted,
+    hasPassword: !!user.password,
+    isSocialAccount: !!user.socialProvider,
+    canSetPassword: !!(user.socialProvider && !user.password),
+    createdAt: user.createdAt,
+    isActive: user.isActive
+  };
 };
