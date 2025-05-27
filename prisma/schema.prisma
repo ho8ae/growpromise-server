@@ -11,7 +11,7 @@ model User {
   id            String    @id @default(uuid())
   email         String?   @unique
   username      String
-  password      String
+  password      String?
   userType      UserType
   profileImage  String?
   createdAt     DateTime  @default(now())
@@ -19,6 +19,17 @@ model User {
   passwordResetToken    String?   // 추가: 비밀번호 재설정 토큰
   passwordResetExpires  DateTime? // 추가: 비밀번호 재설정 토큰 만료 시간
   
+ // 소셜 로그인 관련 필드 추가
+  socialProvider    SocialProvider? // GOOGLE, APPLE, null(일반 로그인)
+  socialId          String?         // 소셜 플랫폼의 고유 ID
+  setupCompleted    Boolean @default(false) // 초기 설정 완료 여부
+  
+ // 프로필 관련 추가 필드
+  phoneNumber       String?         // 전화번호 (선택)
+  bio               String?         // 자기소개 (선택)
+  isActive          Boolean @default(true) // 계정 활성화 상태
+  deletedAt         DateTime?       // 소프트 삭제를 위한 필드
+
 
   // 관계
   parentProfile ParentProfile?
@@ -26,6 +37,15 @@ model User {
   notifications Notification[]
   userCoin UserCoin?
   galleryFavorites GalleryFavorite[]
+
+   // 소셜 로그인 시 socialProvider + socialId 조합이 유니크해야 함
+  @@unique([socialProvider, socialId])
+}
+
+// 소셜 로그인 제공자 enum 추가
+enum SocialProvider {
+  GOOGLE
+  APPLE
 }
 
 enum UserType {
