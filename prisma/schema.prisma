@@ -77,6 +77,11 @@ model ChildProfile {
   currentPlantId  String?  // 현재 키우고 있는 식물 ID
   totalCompletedPlants Int @default(0)
   wateringStreak  Int     @default(0)  // 연속 물주기 일수
+
+  // 카운트 관련 필드 추가
+  verificationCount    Int     @default(0)  // 약속 인증 완료 횟수
+  plantCompletionCount Int     @default(0)  // 식물 완료 횟수 (기존 totalCompletedPlants와 다를 수 있음)
+  
   
   
   // 관계
@@ -87,6 +92,10 @@ model ChildProfile {
   rewards   RewardHistory[]
   plantInventory PlantInventory[]
   plantDrawHistory PlantDrawHistory[]
+
+  tickets       DrawTicket[]
+  ticketRewards TicketReward[]
+  missions      Mission[]
 }
 
 model ChildParentConnection {
@@ -234,6 +243,100 @@ model UserCoin {
   user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
 }
 
+
+// 티켓 타입 enum
+enum TicketType {
+  BASIC      // 기본 팩
+  PREMIUM    // 프리미엄 팩
+  SPECIAL    // 스페셜 팩
+}
+
+// 뽑기 티켓 모델
+model DrawTicket {
+  id          String    @id @default(uuid())
+  childId     String
+  ticketType  TicketType @default(BASIC)
+  isUsed      Boolean   @default(false)
+  earnedFrom  String    // 획득 경로 (VERIFICATION_MILESTONE, PLANT_COMPLETION, MISSION_REWARD 등)
+  earnedAt    DateTime  @default(now())
+  usedAt      DateTime?
+  
+  // 관계
+  child       ChildProfile @relation(fields: [childId], references: [id], onDelete: Cascade)
+  
+  @@index([childId, isUsed])
+}
+
+
+
+enum RewardType {
+  VERIFICATION_MILESTONE  // 약속 인증 마일스톤
+  PLANT_COMPLETION        // 식물 완료 마일스톤
+  DAILY_STREAK           // 연속 물주기 보상
+  WEEKLY_MISSION         // 주간 미션
+  MONTHLY_MISSION        // 월간 미션
+}
+
+model TicketReward {
+  id             String      @id @default(uuid())
+  childId        String?     // null이면 전체 아이에게 적용
+  rewardType     RewardType  // 보상 종류
+  requiredCount  Int         // 필요한 카운트 수
+  ticketType     TicketType  @default(BASIC)
+  ticketCount    Int         @default(1) // 지급할 티켓 수
+  isActive       Boolean     @default(true)
+  description    String?     // 보상 설명
+  createdAt      DateTime    @default(now())
+  
+  // 관계
+  child          ChildProfile? @relation(fields: [childId], references: [id], onDelete: Cascade)
+  
+  // 유니크 제약조건 추가 (같은 아이가 같은 타입의 같은 카운트로 중복 보상을 받지 않도록)
+  @@unique([childId, rewardType, requiredCount])
+  @@index([rewardType, requiredCount])
+}
+
+enum MissionType {
+  DAILY_VERIFICATION   // 매일 약속 인증
+  WEEKLY_VERIFICATION  // 주간 약속 인증
+  MONTHLY_VERIFICATION // 월간 약속 인증
+  PLANT_WATER         // 식물 물주기
+  PLANT_COMPLETION    // 식물 완료
+  STREAK_MAINTENANCE  // 연속 기록 유지
+}
+
+// 미션 시스템 모델
+model Mission {
+  id            String        @id @default(uuid())
+  childId       String?       // null이면 전체 아이에게 적용
+  title         String
+  description   String
+  missionType   MissionType
+  targetCount   Int           // 목표 카운트
+  currentCount  Int           @default(0) // 현재 진행 카운트
+  ticketReward  TicketType    @default(BASIC)
+  ticketCount   Int           @default(1)
+  startDate     DateTime      @default(now())
+  endDate       DateTime?     // null이면 무기한
+  isCompleted   Boolean       @default(false)
+  isActive      Boolean       @default(true)
+  completedAt   DateTime?
+  createdAt     DateTime      @default(now())
+  updatedAt     DateTime      @updatedAt
+  
+  
+  // 관계
+  child         ChildProfile? @relation(fields: [childId], references: [id], onDelete: Cascade)
+  
+  @@index([childId, isActive, isCompleted])
+  @@index([missionType, isActive])
+  @@index([endDate])
+  
+  // 같은 아이가 같은 타입의 미션을 중복으로 가지지 않도록 (전체 적용 미션 제외)
+  @@unique([childId, missionType, targetCount], name: "unique_child_mission")
+}
+
+
 // 소유한 식물 유형 (인벤토리)
 model PlantInventory {
   id          String   @id @default(uuid())
@@ -260,6 +363,8 @@ model PlantDrawHistory {
   
   child           ChildProfile @relation(fields: [childId], references: [id], onDelete: Cascade)
   plantType       PlantType    @relation(fields: [plantTypeId], references: [id], onDelete: Cascade)
+  ticketUsed    Boolean   @default(false)  // 티켓을 사용했는지 여부
+  ticketType    TicketType? // 사용한 티켓 타입
 }
 
 

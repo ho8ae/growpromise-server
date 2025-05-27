@@ -15,6 +15,8 @@ import stickerRoutes from './api/sticker/sticker.routes';
 import notificationRoutes from './api/notification/notification.routes';
 import plantRoutes from './api/plant/plant.routes';
 import galleryRoutes from './api/gallery/gallery.routes';
+import ticketRoutes from './api/ticket/ticket.routes';
+import missionRoutes from './api/mission/mission.routes';
 
 
 // 미들웨어 임포트
@@ -109,6 +111,8 @@ app.use('/api/notifications', notificationRoutes);
 app.use('/api/plants', plantRoutes);
 app.use('/api/gallery', galleryRoutes);
 
+app.use('/api/tickets', ticketRoutes);
+app.use('/api/missions', missionRoutes);
 
 // 기본 라우트
 app.get('/', (req: Request, res: Response) => {
