@@ -6,6 +6,419 @@ import { UserType } from '@prisma/client';
 import crypto from 'crypto';
 import nodemailer from 'nodemailer';
 
+import { SocialProvider } from '@prisma/client';
+import { OAuth2Client } from 'google-auth-library';
+
+
+
+// Google OAuth 클라이언트 초기화
+const googleClient = new OAuth2Client(
+  process.env.GOOGLE_CLIENT_ID,
+  process.env.GOOGLE_CLIENT_SECRET
+);
+
+/**
+ * Google ID 토큰 검증 (개선된 버전)
+ */
+const verifyGoogleToken = async (idToken: string) => {
+  try {
+    console.log('🔍 Google 토큰 검증 시작...');
+    console.log('- Client ID:', process.env.GOOGLE_CLIENT_ID ? '✅ 설정됨' : '❌ 없음');
+    console.log('- Token 길이:', idToken.length);
+    
+    const ticket = await googleClient.verifyIdToken({
+      idToken,
+      audience: process.env.GOOGLE_CLIENT_ID,
+    });
+    
+    const payload = ticket.getPayload();
+    if (!payload) {
+      throw new ApiError('Invalid Google token payload', 400);
+    }
+
+    console.log('✅ Google 토큰 검증 성공:', {
+      sub: payload.sub,
+      email: payload.email,
+      name: payload.name
+    });
+
+    return {
+      socialId: payload.sub,
+      email: payload.email,
+      name: payload.name || payload.email?.split('@')[0] || 'User',
+      profileImage: payload.picture
+    };
+  } catch (error: any) {
+    console.error('❌ Google 토큰 검증 실패:', error.message);
+    throw new ApiError('Google token verification failed', 400);
+  }
+};
+
+/**
+ * Apple ID 토큰 간단 검증 (Base64 디코딩만)
+ */
+const verifyAppleToken = async (idToken: string, userInfo?: any) => {
+  try {
+    // JWT의 payload 부분만 Base64 디코딩
+    const parts = idToken.split('.');
+    if (parts.length !== 3) {
+      throw new Error('Invalid JWT format');
+    }
+    
+    const payload = JSON.parse(Buffer.from(parts[1], 'base64').toString());
+    
+    return {
+      socialId: payload.sub,
+      email: payload.email || userInfo?.email,
+      name: userInfo?.fullName?.givenName || userInfo?.email?.split('@')[0] || 'User'
+    };
+  } catch (error) {
+    throw new ApiError('Apple token verification failed', 400);
+  }
+};
+
+
+/**
+ * 소셜 로그인 - 1단계 (최소 정보로 계정 생성)
+ */
+export const socialSignIn = async (
+  provider: 'GOOGLE' | 'APPLE',
+  idToken: string,
+  userInfo?: any // Apple의 경우 추가 정보
+) => {
+  let socialData;
+  
+  // 토큰 검증
+  if (provider === 'GOOGLE') {
+    socialData = await verifyGoogleToken(idToken);
+  } else {
+    socialData = await verifyAppleToken(idToken, userInfo);
+  }
+
+  // 기존 사용자 찾기
+  let existingUser = await prisma.user.findFirst({
+    where: {
+      socialProvider: provider as SocialProvider,
+      socialId: socialData.socialId
+    }
+  });
+
+  // 이메일로도 확인 (기존 일반 계정과 연동)
+  if (!existingUser && socialData.email) {
+    existingUser = await prisma.user.findUnique({
+      where: { email: socialData.email }
+    });
+
+    // 기존 계정을 소셜 계정으로 연동
+    if (existingUser && !existingUser.socialProvider) {
+      existingUser = await prisma.user.update({
+        where: { id: existingUser.id },
+        data: {
+          socialProvider: provider as SocialProvider,
+          socialId: socialData.socialId,
+          // profileImage: socialData.profileImage || existingUser.profileImage 
+        }
+      });
+    }
+  }
+
+  // 기존 사용자가 있으면 로그인 처리
+  if (existingUser) {
+    const token = generateToken(existingUser.id, existingUser.userType);
+
+    return {
+      user: {
+        id: existingUser.id,
+        username: existingUser.username,
+        email: existingUser.email,
+        userType: existingUser.userType,
+        setupCompleted: existingUser.setupCompleted,
+        isNewUser: false
+      },
+      token,
+      needsSetup: !existingUser.setupCompleted
+    };
+  }
+
+  // 새 사용자 생성 (최소 정보만으로)
+  const newUser = await prisma.user.create({
+    data: {
+      email: socialData.email,
+      username: socialData.name,
+      password: null, // 소셜 로그인은 비밀번호 없음
+      userType: 'PARENT', // 기본값, 나중에 설정에서 변경 가능
+      socialProvider: provider as SocialProvider,
+      socialId: socialData.socialId,
+      // profileImage: socialData.profileImage,
+      setupCompleted: false // 초기 설정 필요
+    }
+  });
+
+  const token = generateToken(newUser.id, newUser.userType);
+
+  return {
+    user: {
+      id: newUser.id,
+      username: newUser.username,
+      email: newUser.email,
+      userType: newUser.userType,
+      setupCompleted: false,
+      isNewUser: true
+    },
+    token,
+    needsSetup: true
+  };
+};
+
+/**
+ * 소셜 로그인 - 2단계 (사용자 타입 및 프로필 설정)
+ */
+export const completeSocialSetup = async (
+  userId: string,
+  userType: 'PARENT' | 'CHILD',
+  setupData: {
+    birthDate?: Date;
+    parentCode?: string;
+  } = {}
+) => {
+  const user = await prisma.user.findUnique({
+    where: { id: userId }
+  });
+
+  if (!user) {
+    throw new ApiError('사용자를 찾을 수 없습니다.', 404);
+  }
+
+  if (user.setupCompleted) {
+    throw new ApiError('이미 설정이 완료된 계정입니다.', 400);
+  }
+
+  const result = await prisma.$transaction(async (prisma) => {
+    // 사용자 타입 업데이트
+    const updatedUser = await prisma.user.update({
+      where: { id: userId },
+      data: {
+        userType: userType as UserType,
+        setupCompleted: true
+      }
+    });
+
+    let profileId = '';
+
+    // 프로필 생성
+    if (userType === 'PARENT') {
+      // 연결 코드 생성
+      let connectionCode = generateRandomCode();
+      let existingCode = await prisma.parentProfile.findFirst({
+        where: { connectionCode }
+      });
+      
+      while (existingCode) {
+        connectionCode = generateRandomCode();
+        existingCode = await prisma.parentProfile.findFirst({
+          where: { connectionCode }
+        });
+      }
+
+      const parentProfile = await prisma.parentProfile.create({
+        data: {
+          userId: user.id,
+          connectionCode,
+          connectionCodeExpires: new Date(Date.now() + 5 * 60 * 1000)
+        }
+      });
+      
+      profileId = parentProfile.id;
+    } else {
+      const childProfile = await prisma.childProfile.create({
+        data: {
+          userId: user.id,
+          birthDate: setupData.birthDate || null,
+          characterStage: 1,
+          totalCompletedPlants: 0,
+          wateringStreak: 0
+        }
+      });
+
+      profileId = childProfile.id;
+
+      // 부모 코드가 있는 경우 연결
+      if (setupData.parentCode) {
+        const parentProfile = await prisma.parentProfile.findFirst({
+          where: {
+            connectionCode: setupData.parentCode,
+            connectionCodeExpires: { gt: new Date() }
+          }
+        });
+
+        if (parentProfile) {
+          await prisma.childParentConnection.create({
+            data: {
+              childId: childProfile.id,
+              parentId: parentProfile.id
+            }
+          });
+        }
+      }
+    }
+
+    return { user: updatedUser, profileId };
+  });
+
+  const token = generateToken(result.user.id, result.user.userType, result.profileId);
+
+  return {
+    user: {
+      id: result.user.id,
+      username: result.user.username,
+      email: result.user.email,
+      userType: result.user.userType,
+      profileId: result.profileId,
+      setupCompleted: true
+    },
+    token
+  };
+};
+
+
+/**
+ * 소셜 계정에 비밀번호 설정
+ */
+export const setSocialAccountPassword = async (
+  userId: string,
+  newPassword: string
+) => {
+  // 사용자 조회
+  const user = await prisma.user.findUnique({
+    where: { 
+      id: userId,
+      isActive: true
+    }
+  });
+
+  if (!user) {
+    throw new ApiError('사용자를 찾을 수 없습니다.', 404);
+  }
+
+  // 소셜 로그인 사용자만 비밀번호 설정 가능
+  if (!user.socialProvider) {
+    throw new ApiError('일반 로그인 사용자는 이 기능을 사용할 수 없습니다.', 400);
+  }
+
+  // 이미 비밀번호가 설정된 경우
+  if (user.password) {
+    throw new ApiError('이미 비밀번호가 설정되어 있습니다.', 400);
+  }
+
+  // 새 비밀번호 해싱
+  const hashedPassword = await hashPassword(newPassword);
+
+  // 비밀번호 설정
+  await prisma.user.update({
+    where: { id: userId },
+    data: { 
+      password: hashedPassword,
+      updatedAt: new Date()
+    }
+  });
+
+  return {
+    message: '비밀번호가 성공적으로 설정되었습니다.'
+  };
+};
+
+/**
+ * 계정 비활성화 (소프트 삭제)
+ */
+export const deactivateAccount = async (
+  userId: string,
+  password?: string
+) => {
+  // 사용자 조회
+  const user = await prisma.user.findUnique({
+    where: { 
+      id: userId,
+      isActive: true
+    }
+  });
+
+  if (!user) {
+    throw new ApiError('사용자를 찾을 수 없습니다.', 404);
+  }
+
+  // 일반 로그인 사용자인 경우 비밀번호 확인
+  if (!user.socialProvider && user.password) {
+    if (!password) {
+      throw new ApiError('비밀번호 확인이 필요합니다.', 400);
+    }
+
+    const isPasswordValid = await verifyPassword(password, user.password);
+    if (!isPasswordValid) {
+      throw new ApiError('비밀번호가 일치하지 않습니다.', 401);
+    }
+  }
+
+  // 계정 비활성화 (username에 삭제 시간 추가로 중복 방지)
+  const deletedUsername = `${user.username}_deleted_${Date.now()}`;
+  const deletedEmail = user.email ? `${user.email}_deleted_${Date.now()}` : null;
+
+  await prisma.user.update({
+    where: { id: userId },
+    data: {
+      username: deletedUsername,
+      email: deletedEmail,
+      isActive: false,
+      deletedAt: new Date(),
+      updatedAt: new Date()
+    }
+  });
+
+  return {
+    message: '계정이 성공적으로 비활성화되었습니다.'
+  };
+};
+
+/**
+ * 계정 완전 삭제
+ */
+export const deleteAccount = async (
+  userId: string,
+  password?: string
+) => {
+  // 사용자 조회
+  const user = await prisma.user.findUnique({
+    where: { 
+      id: userId,
+      isActive: true
+    }
+  });
+
+  if (!user) {
+    throw new ApiError('사용자를 찾을 수 없습니다.', 404);
+  }
+
+  // 일반 로그인 사용자인 경우 비밀번호 확인
+  if (!user.socialProvider && user.password) {
+    if (!password) {
+      throw new ApiError('비밀번호 확인이 필요합니다.', 400);
+    }
+
+    const isPasswordValid = await verifyPassword(password, user.password);
+    if (!isPasswordValid) {
+      throw new ApiError('비밀번호가 일치하지 않습니다.', 401);
+    }
+  }
+
+  // 계정 완전 삭제 (CASCADE로 관련 데이터도 자동 삭제됨)
+  await prisma.user.delete({
+    where: { id: userId }
+  });
+
+  return {
+    message: '계정이 완전히 삭제되었습니다.'
+  };
+};
+
 /**
  * 비밀번호 해싱
  */
@@ -227,7 +640,7 @@ export const loginUser = async (
   }
 
   // 비밀번호 검증
-  const isPasswordValid = await verifyPassword(password, user.password);
+  const isPasswordValid = await verifyPassword(password, user.password || '');
   if (!isPasswordValid) {
     throw new ApiError('비밀번호가 일치하지 않습니다.', 401);
   }
@@ -376,7 +789,7 @@ export const changePassword = async (
   }
 
   // 현재 비밀번호 확인
-  const isPasswordValid = await verifyPassword(currentPassword, user.password);
+  const isPasswordValid = await verifyPassword(currentPassword, user.password || '');
   if (!isPasswordValid) {
     throw new ApiError('현재 비밀번호가 일치하지 않습니다.', 401);
   }
