@@ -1,6 +1,7 @@
 import { prisma } from '../../app';
 import { ApiError } from '../../middleware/error.middleware';
 import { getPlantImageUrl, getPlantStageImages } from '../../utils/imageUrl';
+import * as ticketService from '../ticket/ticket.service';
 
 /**
  * 모든 식물 유형 조회
@@ -401,6 +402,13 @@ export const waterPlant = async (plantId: string) => {
           wateringStreak,
         },
       });
+      // 🎯 티켓 시스템 연동: 연속 물주기 보상 체크
+      try {
+        await ticketService.handleWateringStreak(plant.childId, wateringStreak);
+      } catch (error) {
+        console.error('티켓 시스템 처리 오류:', error);
+        // 티켓 시스템 오류가 발생해도 전체 트랜잭션을 실패하지 않도록 무시
+      }
     }
 
     return {
@@ -470,7 +478,7 @@ export const addExperienceToPlant = async (
 };
 
 /**
- * 식물 성장 단계 올리기
+ * 식물 성장 단계 올리기 - 티켓 시스템 연동 버전
  */
 export const advancePlantStage = async (plantId: string) => {
   // 식물 조회
@@ -523,6 +531,14 @@ export const advancePlantStage = async (plantId: string) => {
             currentPlantId: null,
           },
         });
+
+        // 🎯 티켓 시스템 연동: 식물 완료 카운트 증가 및 보상 체크
+        try {
+          await ticketService.handlePlantComplete(plant.childId);
+        } catch (error) {
+          console.error('티켓 시스템 처리 오류:', error);
+          // 티켓 시스템 오류가 발생해도 전체 트랜잭션을 실패하지 않도록 무시
+        }
       }
 
       return updatedPlant;

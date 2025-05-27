@@ -8,6 +8,8 @@ import {
 } from '@prisma/client';
 import { addDays, addMonths, addWeeks, format } from 'date-fns';
 import * as plantService from '../plant/plant.service';
+import * as ticketService from '../ticket/ticket.service';
+
 
 /**
  * 부모 프로필 ID 조회
@@ -516,7 +518,7 @@ export const submitVerification = async (
   return updatedAssignment;
 };
 /**
- * 약속 인증 응답 (승인/거절)
+ * 약속 인증 응답 (승인/거절) - 티켓 시스템 연동 버전
  */
 export const respondToVerification = async (
   promiseAssignmentId: string,
@@ -595,19 +597,13 @@ export const respondToVerification = async (
 
     // 승인된 경우 스티커 부여 및 식물 경험치 추가
     if (approved) {
-      // 스티커 생성 프론트에서 스티커 주는 걸로
-      // const sticker = await prisma.sticker.create({
-      //   data: {
-      //     childId: promiseAssignment.childId,
-      //     title: `${promiseAssignment.promise.title} 완료`,
-      //     description: `${format(new Date(), 'yyyy-MM-dd')}에 ${
-      //       promiseAssignment.promise.title
-      //     } 약속을 완료했어요!`,
-      //     imageUrl:
-      //       'https://growpromise-uploads.s3.ap-northeast-2.amazonaws.com/promise-verifications/0d4dce8b-b578-4105-95fd-29393af7bca2.png', // 기본 스티커 이미지
-      //     createdAt: new Date(),
-      //   },
-      // });
+      // 🎯 티켓 시스템 연동: 약속 인증 완료 카운트 증가 및 보상 체크
+      try {
+        await ticketService.handleVerificationComplete(promiseAssignment.childId);
+      } catch (error) {
+        console.error('티켓 시스템 처리 오류:', error);
+        // 티켓 시스템 오류가 발생해도 전체 트랜잭션을 실패하지 않도록 무시
+      }
 
       // 현재 키우고 있는 식물 조회
       const childProfile = await prisma.childProfile.findUnique({
