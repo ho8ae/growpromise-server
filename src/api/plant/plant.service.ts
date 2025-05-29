@@ -167,13 +167,13 @@ export const startNewPlant = async (
   }
 
   // 식물 유형 잠금 해제 여부 확인
-  if (
-    !plantType.isBasic &&
-    plantType.unlockRequirement !== null &&
-    plantType.unlockRequirement > childProfile.totalCompletedPlants
-  ) {
-    throw new ApiError('이 식물은 아직 잠금 해제되지 않았습니다.', 403);
-  }
+  // if (
+  //   !plantType.isBasic &&
+  //   plantType.unlockRequirement !== null &&
+  //   plantType.unlockRequirement > childProfile.totalCompletedPlants
+  // ) {
+  //   throw new ApiError('이 식물은 아직 잠금 해제되지 않았습니다.', 403);
+  // }
 
   // 현재 진행 중인 식물이 있는지 확인
   const currentPlant = await prisma.plant.findFirst({
@@ -272,6 +272,7 @@ export const startNewPlant = async (
 
   return result;
 };
+
 
 /**
  * 인벤토리에서 식물 제거 (새 API 엔드포인트)
@@ -478,15 +479,27 @@ export const addExperienceToPlant = async (
 };
 
 /**
- * 식물 성장 단계 올리기 - 티켓 시스템 연동 버전
+ * 식물 성장 단계 올리기 - 트랜잭션 분리 버전
  */
 export const advancePlantStage = async (plantId: string) => {
+  console.log('🌱 advancePlantStage 시작, plantId:', plantId);
+  
   // 식물 조회
   const plant = await prisma.plant.findUnique({
     where: { id: plantId },
     include: {
       plantType: true,
     },
+  });
+
+  console.log('🌱 조회된 식물 정보:', {
+    id: plant?.id,
+    currentStage: plant?.currentStage,
+    canGrow: plant?.canGrow,
+    experience: plant?.experience,
+    experienceToGrow: plant?.experienceToGrow,
+    isCompleted: plant?.isCompleted,
+    growthStages: plant?.plantType?.growthStages
   });
 
   if (!plant) {
@@ -505,12 +518,14 @@ export const advancePlantStage = async (plantId: string) => {
     );
   }
 
-  // 최대 성장 단계 확인
+  // 🔧 최대 성장 단계 확인 - 이미 최대 단계에 도달했다면 완료 처리
   if (plant.currentStage >= plant.plantType.growthStages) {
-    // 완료 처리
-    const completedPlant = await prisma.$transaction(async (prisma) => {
+    console.log('🏆 최대 단계 도달 - 완료 처리 시작');
+    
+    // 🔧 핵심 식물 완료 처리만 트랜잭션으로 (빠르게)
+    const completedPlant = await prisma.$transaction(async (tx) => {
       // 식물 완료 처리
-      const updatedPlant = await prisma.plant.update({
+      const updatedPlant = await tx.plant.update({
         where: { id: plant.id },
         data: {
           isCompleted: true,
@@ -519,29 +534,33 @@ export const advancePlantStage = async (plantId: string) => {
       });
 
       // 자녀 프로필 업데이트
-      const childProfile = await prisma.childProfile.findUnique({
+      const childProfile = await tx.childProfile.findUnique({
         where: { id: plant.childId },
       });
 
       if (childProfile) {
-        await prisma.childProfile.update({
+        await tx.childProfile.update({
           where: { id: plant.childId },
           data: {
             totalCompletedPlants: childProfile.totalCompletedPlants + 1,
             currentPlantId: null,
           },
         });
-
-        // 🎯 티켓 시스템 연동: 식물 완료 카운트 증가 및 보상 체크
-        try {
-          await ticketService.handlePlantComplete(plant.childId);
-        } catch (error) {
-          console.error('티켓 시스템 처리 오류:', error);
-          // 티켓 시스템 오류가 발생해도 전체 트랜잭션을 실패하지 않도록 무시
-        }
       }
 
+      console.log('✅ 식물 완료 처리 성공');
       return updatedPlant;
+    });
+
+    // 🔧 티켓 시스템은 별도 비동기 처리 (실패해도 식물 완료에 영향 없음)
+    setImmediate(async () => {
+      try {
+        console.log('🎫 티켓 시스템 비동기 처리 시작');
+        await ticketService.handlePlantComplete(plant.childId);
+        console.log('✅ 티켓 시스템 처리 완료');
+      } catch (error) {
+        console.error('❌ 티켓 시스템 비동기 처리 오류:', error);
+      }
     });
 
     return {
@@ -551,10 +570,11 @@ export const advancePlantStage = async (plantId: string) => {
     };
   }
 
-  // 다음 단계 경험치 요구량 계산
+  // 🔧 아직 최대 단계가 아니면 다음 단계로 성장
+  console.log('🌱 다음 단계로 성장 처리 시작');
+  
   const nextExperienceToGrow = calculateNextExperienceRequirement(plant);
 
-  // 다음 단계로 성장
   const updatedPlant = await prisma.plant.update({
     where: { id: plant.id },
     data: {
@@ -563,6 +583,11 @@ export const advancePlantStage = async (plantId: string) => {
       experienceToGrow: nextExperienceToGrow,
       canGrow: false, // 성장 후 다시 경험치를 모아야 함
     },
+  });
+
+  console.log('✅ 다음 단계 성장 완료:', {
+    newStage: updatedPlant.currentStage,
+    experienceToGrow: updatedPlant.experienceToGrow
   });
 
   return {
