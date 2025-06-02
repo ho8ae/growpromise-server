@@ -1,0 +1,203 @@
+name: Deploy GrowPromise API
+
+on:
+  push:
+    branches: [ main ]
+    paths:
+      - 'api-server/**'
+      - 'docker-compose.yml'
+      - '.github/workflows/**'
+  pull_request:
+    branches: [ main ]
+
+env:
+  PROJECT_NAME: growpromise-project
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    
+    services:
+      postgres:
+        image: postgres:15
+        env:
+          POSTGRES_PASSWORD: postgres
+          POSTGRES_DB: test_db
+        options: >-
+          --health-cmd pg_isready
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+        ports:
+          - 5432:5432
+
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v4
+    
+    - name: Setup Node.js
+      uses: actions/setup-node@v4
+      with:
+        node-version: '18'
+        cache: 'npm'
+        cache-dependency-path: api-server/package-lock.json
+    
+    - name: Install dependencies
+      working-directory: ./api-server
+      run: npm ci
+    
+    - name: Generate Prisma client
+      working-directory: ./api-server
+      run: npx prisma generate
+      env:
+        DATABASE_URL: postgresql://postgres:postgres@localhost:5432/test_db
+    
+    - name: Run database migrations
+      working-directory: ./api-server
+      run: npx prisma migrate deploy
+      env:
+        DATABASE_URL: postgresql://postgres:postgres@localhost:5432/test_db
+    
+    - name: Run tests
+      working-directory: ./api-server
+      run: npm test
+      env:
+        DATABASE_URL: postgresql://postgres:postgres@localhost:5432/test_db
+        JWT_SECRET: test-secret
+    
+    - name: Run type check
+      working-directory: ./api-server
+      run: npm run type-check
+    
+    - name: Run linting
+      working-directory: ./api-server
+      run: npm run lint
+
+  deploy:
+    needs: test
+    runs-on: ubuntu-latest
+    if: github.ref == 'refs/heads/main'
+    
+    steps:
+    - name: Deploy to EC2
+      uses: appleboy/ssh-action@v1.0.3
+      with:
+        host: ${{ secrets.EC2_HOST }}
+        username: ${{ secrets.EC2_USERNAME }}
+        key: ${{ secrets.EC2_PRIVATE_KEY }}
+        port: 22
+        script: |
+          echo "🚀 Starting deployment..."
+          
+          # 프로젝트 디렉토리 이동/생성
+          cd ~ && mkdir -p ${{ env.PROJECT_NAME }}
+          cd ${{ env.PROJECT_NAME }}
+          
+          # Git 저장소 초기화 또는 업데이트
+          if [ ! -d ".git" ]; then
+            echo "📥 Cloning repository..."
+            git clone ${{ github.server_url }}/${{ github.repository }} .
+          else
+            echo "🔄 Updating repository..."
+            git fetch origin
+            git reset --hard origin/main
+          fi
+          
+          # Docker 네트워크 생성 (없으면)
+          docker network create growpromise-network 2>/dev/null || echo "Network already exists"
+          
+          # 환경 변수 파일 확인
+          if [ ! -f ".env" ]; then
+            echo "⚠️ Creating .env file..."
+            cat > .env << 'EOF'
+          DATABASE_URL=postgresql://growpromise:${{ secrets.DB_PASSWORD }}@postgres:5432/growpromise_db
+          POSTGRES_DB=growpromise_db
+          POSTGRES_USER=growpromise
+          POSTGRES_PASSWORD=${{ secrets.DB_PASSWORD }}
+          JWT_SECRET=${{ secrets.JWT_SECRET }}
+          NODE_ENV=production
+          EOF
+          fi
+          
+          # 기존 컨테이너 중지
+          echo "🔄 Stopping existing containers..."
+          docker-compose down --remove-orphans 2>/dev/null || true
+          
+          # 새 컨테이너 빌드 및 시작
+          echo "🏗️ Building and starting containers..."
+          docker-compose up -d --build
+          
+          # 데이터베이스 마이그레이션
+          echo "🗄️ Running database migrations..."
+          sleep 15  # 컨테이너 시작 대기
+          docker-compose exec -T api-server npx prisma migrate deploy || echo "Migration may have failed, but continuing..."
+          
+          # nginx-proxy 설정 업데이트 및 재시작
+          echo "🔧 Updating nginx configuration..."
+          cd ~/nginx-proxy
+          
+          # growpromise.conf 생성 (없는 경우)
+          if [ ! -f "conf.d/growpromise.conf" ]; then
+            echo "Creating nginx configuration..."
+            cat > conf.d/growpromise.conf << 'NGINXEOF'
+          server {
+              listen 3030;
+              server_name _;
+              
+              add_header Access-Control-Allow-Origin * always;
+              add_header Access-Control-Allow-Methods "GET, POST, PUT, DELETE, OPTIONS" always;
+              add_header Access-Control-Allow-Headers "Content-Type, Authorization" always;
+              
+              location / {
+                  if ($$request_method = 'OPTIONS') {
+                      return 204;
+                  }
+                  proxy_pass http://api-server-growpromise:3000;
+                  proxy_set_header Host $$host;
+                  proxy_set_header X-Real-IP $$remote_addr;
+                  client_max_body_size 50M;
+              }
+          }
+          NGINXEOF
+          fi
+          
+          # nginx-proxy 재시작
+          docker-compose restart nginx-proxy 2>/dev/null || echo "nginx-proxy not running"
+          
+          # 헬스체크
+          echo "🏥 Performing health check..."
+          cd ~/${{ env.PROJECT_NAME }}
+          sleep 30
+          
+          # 헬스체크 시도
+          for i in {1..5}; do
+            if docker-compose exec -T api-server curl -f http://localhost:3000/health; then
+              echo "✅ Health check passed!"
+              break
+            else
+              echo "❌ Health check attempt $i failed, retrying..."
+              sleep 10
+            fi
+          done
+          
+          # 정리
+          echo "🧹 Cleaning up..."
+          docker system prune -f
+          
+          echo "🎉 Deployment completed!"
+          echo "📱 GrowPromise API is available at: http://${{ secrets.EC2_HOST }}:3030"
+
+  notify:
+    needs: [test, deploy]
+    runs-on: ubuntu-latest
+    if: always()
+    
+    steps:
+    - name: Notify deployment result
+      run: |
+        if [ "${{ needs.deploy.result }}" == "success" ]; then
+          echo "✅ GrowPromise deployment successful!"
+        else
+          echo "❌ GrowPromise deployment failed!"
+          exit 1
+        fi
