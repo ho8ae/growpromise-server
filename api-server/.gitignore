@@ -1,0 +1,84 @@
+# Node.js 의존성 모듈
+node_modules/
+npm-debug.log
+yarn-debug.log
+yarn-error.log
+package-lock.json
+yarn.lock
+
+# 환경 변수 파일
+.env
+.env.local
+.env.development
+.env.test
+.env.production
+.env*.local
+
+# Prisma 관련 파일
+/prisma/migrations/
+/prisma/dev.db
+/prisma/dev.db-journal
+
+# 빌드 출력 디렉토리
+/dist/
+/build/
+/out/
+
+# TypeScript 캐시
+*.tsbuildinfo
+
+# Logs
+logs
+*.log
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+lerna-debug.log*
+
+# 업로드 폴더 (파일 자체는 제외, 디렉토리는 유지)
+/uploads/*
+!/uploads/.gitkeep
+/uploads/promises/*
+!/uploads/promises/.gitkeep
+/uploads/profiles/*
+!/uploads/profiles/.gitkeep
+/uploads/stickers/*
+!/uploads/stickers/.gitkeep
+
+# OS 생성 파일
+.DS_Store
+Thumbs.db
+.directory
+*.swp
+*.swo
+
+# IDE/에디터 폴더
+.idea/
+.vscode/
+*.sublime-workspace
+*.sublime-project
+.project
+.classpath
+.c9/
+*.launch
+.settings/
+*.tmproj
+.netbeans/
+
+# 테스트 커버리지 폴더
+/coverage/
+/.nyc_output/
+
+# 기타 임시 파일
+.tmp/
+temp/
+*.temp
+
+# 로컬 개발 설정
+.prettierrc
+.eslintcache
+
+# 배포 관련 파일
+.vercel
+.netlify
+.serverless/

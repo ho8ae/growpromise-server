@@ -1,0 +1,41 @@
+FROM node:18-alpine
+
+WORKDIR /app
+
+# 시스템 의존성 설치 (curl은 헬스체크용)
+RUN apk add --no-cache curl
+
+# 패키지 파일 복사 및 의존성 설치
+COPY package*.json ./
+RUN npm ci --only=production && npm cache clean --force
+
+# Prisma CLI 설치
+RUN npm install -g prisma
+
+# 소스 파일 복사
+COPY . .
+
+# Prisma 클라이언트 생성
+RUN npx prisma generate
+
+# TypeScript 빌드 (만약 TypeScript 사용 중이라면)
+# RUN npm run build
+
+# 업로드 디렉토리 생성
+RUN mkdir -p uploads/profiles uploads/promises uploads/stickers
+
+# 비루트 사용자 생성 및 권한 설정
+RUN addgroup -g 1001 -S nodejs && \
+    adduser -S nextjs -u 1001 && \
+    chown -R nextjs:nodejs /app
+
+USER nextjs
+
+EXPOSE 3000
+
+# 헬스체크 추가
+HEALTHCHECK --interval=30s --timeout=10s --start-period=5s --retries=3 \
+  CMD curl -f http://localhost:3000/health || exit 1
+
+# 시작 명령어
+CMD ["npm", "start"]

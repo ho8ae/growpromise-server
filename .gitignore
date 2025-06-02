@@ -1,84 +1,280 @@
-# Node.js 의존성 모듈
-node_modules/
-npm-debug.log
-yarn-debug.log
-yarn-error.log
-package-lock.json
-yarn.lock
+# ===============================================
+# GrowPromise Project .gitignore
+# ===============================================
 
-# 환경 변수 파일
+# 환경 변수 파일들
 .env
 .env.local
 .env.development
-.env.test
 .env.production
-.env*.local
+.env.test
+*.env
 
-# Prisma 관련 파일
-/prisma/migrations/
-/prisma/dev.db
-/prisma/dev.db-journal
-
-# 빌드 출력 디렉토리
-/dist/
-/build/
-/out/
-
-# TypeScript 캐시
-*.tsbuildinfo
-
-# Logs
-logs
-*.log
+# ===============================================
+# Node.js & npm
+# ===============================================
+node_modules/
 npm-debug.log*
 yarn-debug.log*
 yarn-error.log*
 lerna-debug.log*
+.npm
+.eslintcache
+*.tgz
+*.tar.gz
 
-# 업로드 폴더 (파일 자체는 제외, 디렉토리는 유지)
-/uploads/*
-!/uploads/.gitkeep
-/uploads/promises/*
-!/uploads/promises/.gitkeep
-/uploads/profiles/*
-!/uploads/profiles/.gitkeep
-/uploads/stickers/*
-!/uploads/stickers/.gitkeep
+# Runtime data
+pids
+*.pid
+*.seed
+*.pid.lock
 
-# OS 생성 파일
-.DS_Store
-Thumbs.db
-.directory
-*.swp
-*.swo
+# Coverage directory used by tools like istanbul
+coverage/
+*.lcov
 
-# IDE/에디터 폴더
-.idea/
-.vscode/
-*.sublime-workspace
-*.sublime-project
-.project
-.classpath
-.c9/
-*.launch
-.settings/
-*.tmproj
-.netbeans/
+# ===============================================
+# Docker
+# ===============================================
+.docker/
+docker-compose.override.yml
+.dockerignore
 
-# 테스트 커버리지 폴더
-/coverage/
-/.nyc_output/
+# ===============================================
+# Database
+# ===============================================
+# PostgreSQL
+*.sql
+*.sqlite
+*.sqlite3
+*.db
 
-# 기타 임시 파일
-.tmp/
+# Prisma
+prisma/migrations/*/migration.sql
+
+# Database backups
+*.backup
+*.dump
+
+# ===============================================
+# 로그 파일들
+# ===============================================
+logs/
+*.log
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+
+# ===============================================
+# 업로드 파일들
+# ===============================================
+api-server/uploads/
+uploads/
+# 하지만 구조는 유지
+!api-server/uploads/.gitkeep
+!uploads/.gitkeep
+
+# 임시 파일들
+tmp/
 temp/
+*.tmp
 *.temp
 
-# 로컬 개발 설정
-.prettierrc
-.eslintcache
+# ===============================================
+# IDE & 에디터
+# ===============================================
+# VSCode
+.vscode/
+!.vscode/settings.json
+!.vscode/tasks.json
+!.vscode/launch.json
+!.vscode/extensions.json
 
-# 배포 관련 파일
-.vercel
-.netlify
-.serverless/
+# IntelliJ IDEA
+.idea/
+*.iml
+*.ipr
+*.iws
+
+# Sublime Text
+*.sublime-project
+*.sublime-workspace
+
+# Vim
+*.swp
+*.swo
+*~
+
+# Emacs
+*~
+\#*\#
+/.emacs.desktop
+/.emacs.desktop.lock
+*.elc
+auto-save-list
+tramp
+.\#*
+
+# ===============================================
+# macOS
+# ===============================================
+.DS_Store
+.AppleDouble
+.LSOverride
+Icon
+._*
+.DocumentRevisions-V100
+.fseventsd
+.Spotlight-V100
+.TemporaryItems
+.Trashes
+.VolumeIcon.icns
+.com.apple.timemachine.donotpresent
+
+# ===============================================
+# Windows
+# ===============================================
+Thumbs.db
+Thumbs.db:encryptable
+ehthumbs.db
+ehthumbs_vista.db
+*.stackdump
+[Dd]esktop.ini
+$RECYCLE.BIN/
+*.cab
+*.msi
+*.msix
+*.msm
+*.msp
+*.lnk
+
+# ===============================================
+# Linux
+# ===============================================
+*~
+.fuse_hidden*
+.directory
+.Trash-*
+.nfs*
+
+# ===============================================
+# TypeScript
+# ===============================================
+*.tsbuildinfo
+dist/
+build/
+out/
+
+# ===============================================
+# API 서버 관련
+# ===============================================
+# TypeScript 컴파일 결과
+api-server/dist/
+api-server/build/
+
+# API 서버 로그
+api-server/logs/
+api-server/*.log
+
+# API 서버 환경변수
+api-server/.env*
+
+# ===============================================
+# 보안 관련 파일들
+# ===============================================
+# SSL 인증서
+*.pem
+*.key
+*.crt
+*.csr
+*.p12
+*.pfx
+
+# SSH 키
+id_rsa
+id_rsa.pub
+*.ppk
+
+# API 키 파일
+*api-key*
+*secret*
+*credentials*
+
+# ===============================================
+# 배포 관련
+# ===============================================
+# 배포 스크립트의 민감한 정보
+deploy-config.json
+deployment.json
+
+# Docker 볼륨 데이터
+postgres_data/
+redis_data/
+uploads_data/
+
+# ===============================================
+# 테스트 관련
+# ===============================================
+# Jest
+coverage/
+.nyc_output
+
+# 테스트 결과
+test-results/
+junit.xml
+
+# ===============================================
+# 기타
+# ===============================================
+# 압축 파일들
+*.zip
+*.rar
+*.7z
+*.tar
+*.gz
+
+# 백업 파일들
+*.bak
+*.backup
+*~
+
+# 문서 임시 파일들
+*.docx#
+*.xlsx#
+*.pptx#
+
+# 프로젝트 설정 파일들 (개인별로 다를 수 있음)
+.project
+.classpath
+.settings/
+
+# 캐시 디렉토리
+.cache/
+.temp/
+
+# 모니터링 및 분석 도구
+.nyc_output/
+coverage/
+
+# ===============================================
+# Expo 관련 (앱 개발시 필요할 수 있음)
+# ===============================================
+# Expo
+.expo/
+.expo-shared/
+web-build/
+dist/
+
+# ===============================================
+# 특정 파일들
+# ===============================================
+# 로컬 개발용 Docker Compose 파일
+docker-compose.local.yml
+docker-compose.dev.yml
+
+# 개발용 스크립트들
+dev-*.sh
+local-*.sh
+
+# README 드래프트
+README.draft.md
