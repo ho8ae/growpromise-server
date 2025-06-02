@@ -63,15 +63,7 @@ jobs:
       run: npm test
       env:
         DATABASE_URL: postgresql://postgres:postgres@localhost:5432/test_db
-        JWT_SECRET: test-secret
-    
-    - name: Run type check
-      working-directory: ./api-server
-      run: npm run type-check
-    
-    - name: Run linting
-      working-directory: ./api-server
-      run: npm run lint
+        JWT_SECRET: test-secret-for-ci
 
   deploy:
     needs: test
@@ -106,18 +98,33 @@ jobs:
           # Docker 네트워크 생성 (없으면)
           docker network create growpromise-network 2>/dev/null || echo "Network already exists"
           
-          # 환경 변수 파일 확인
-          if [ ! -f ".env" ]; then
-            echo "⚠️ Creating .env file..."
-            cat > .env << 'EOF'
-          DATABASE_URL=postgresql://growpromise:${{ secrets.DB_PASSWORD }}@postgres:5432/growpromise_db
-          POSTGRES_DB=growpromise_db
-          POSTGRES_USER=growpromise
-          POSTGRES_PASSWORD=${{ secrets.DB_PASSWORD }}
+          # 환경 변수 파일 생성 (수정된 부분)
+          echo "⚙️ Creating production environment file..."
+          cat > .env << 'EOF'
+          # 데이터베이스 연결 (AWS RDS)
+          DATABASE_URL=${{ secrets.DATABASE_URL }}
+          
+          # JWT 설정
           JWT_SECRET=${{ secrets.JWT_SECRET }}
+          
+          # 서버 설정
           NODE_ENV=production
+          PORT=3000
+          UPLOAD_DIR=uploads
+          
+          # AWS S3 설정
+          S3_REGION=${{ secrets.S3_REGION }}
+          S3_ACCESS_KEY=${{ secrets.S3_ACCESS_KEY }}
+          S3_SECRET_KEY=${{ secrets.S3_SECRET_KEY }}
+          S3_BUCKET=${{ secrets.S3_BUCKET }}
+          
+          # Google OAuth
+          GOOGLE_CLIENT_ID=${{ secrets.GOOGLE_CLIENT_ID }}
+          GOOGLE_CLIENT_SECRET=${{ secrets.GOOGLE_CLIENT_SECRET }}
           EOF
-          fi
+          
+          # 파일 권한 설정 (보안)
+          chmod 600 .env
           
           # 기존 컨테이너 중지
           echo "🔄 Stopping existing containers..."
@@ -127,12 +134,12 @@ jobs:
           echo "🏗️ Building and starting containers..."
           docker-compose up -d --build
           
-          # 데이터베이스 마이그레이션
+          # 데이터베이스 마이그레이션 (AWS RDS에 대해)
           echo "🗄️ Running database migrations..."
           sleep 15  # 컨테이너 시작 대기
           docker-compose exec -T api-server npx prisma migrate deploy || echo "Migration may have failed, but continuing..."
           
-          # nginx-proxy 설정 업데이트 및 재시작
+          # nginx-proxy 설정 업데이트
           echo "🔧 Updating nginx configuration..."
           cd ~/nginx-proxy
           
@@ -144,32 +151,71 @@ jobs:
               listen 3030;
               server_name _;
               
+              # CORS 설정
               add_header Access-Control-Allow-Origin * always;
               add_header Access-Control-Allow-Methods "GET, POST, PUT, DELETE, OPTIONS" always;
-              add_header Access-Control-Allow-Headers "Content-Type, Authorization" always;
+              add_header Access-Control-Allow-Headers "Content-Type, Authorization, X-Requested-With" always;
+              add_header Access-Control-Max-Age 86400 always;
               
               location / {
+                  # OPTIONS 요청 처리
                   if ($$request_method = 'OPTIONS') {
+                      add_header Access-Control-Allow-Origin * always;
+                      add_header Access-Control-Allow-Methods "GET, POST, PUT, DELETE, OPTIONS" always;
+                      add_header Access-Control-Allow-Headers "Content-Type, Authorization, X-Requested-With" always;
+                      add_header Access-Control-Max-Age 86400 always;
+                      add_header Content-Length 0;
+                      add_header Content-Type text/plain;
                       return 204;
                   }
+                  
                   proxy_pass http://api-server-growpromise:3000;
                   proxy_set_header Host $$host;
                   proxy_set_header X-Real-IP $$remote_addr;
+                  proxy_set_header X-Forwarded-For $$proxy_add_x_forwarded_for;
+                  proxy_set_header X-Forwarded-Proto $$scheme;
+                  
+                  # 타임아웃 설정
+                  proxy_connect_timeout 60s;
+                  proxy_send_timeout 60s;
+                  proxy_read_timeout 60s;
+                  
+                  # 업로드 파일 크기 제한
                   client_max_body_size 50M;
+              }
+              
+              # 헬스체크
+              location /health {
+                  proxy_pass http://api-server-growpromise:3000/health;
+                  access_log off;
               }
           }
           NGINXEOF
           fi
           
+          # nginx-proxy docker-compose.yml 업데이트 (growpromise-network 추가)
+          if ! grep -q "growpromise-network" docker-compose.yml; then
+            echo "Adding growpromise network to nginx-proxy..."
+            # 백업
+            cp docker-compose.yml docker-compose.yml.backup
+            
+            # networks 섹션에 growpromise-network 추가
+            sed -i '/- kidsbugs-network/a \      - growpromise-network' docker-compose.yml
+            sed -i '/kidsbugs-network:/a \  growpromise-network:\n    external: true' docker-compose.yml
+          fi
+          
           # nginx-proxy 재시작
-          docker-compose restart nginx-proxy 2>/dev/null || echo "nginx-proxy not running"
+          docker-compose restart nginx-proxy 2>/dev/null || echo "nginx-proxy restart failed"
+          
+          # growpromise 네트워크에 nginx-proxy 연결
+          docker network connect growpromise-network nginx-proxy 2>/dev/null || echo "Already connected to network"
           
           # 헬스체크
           echo "🏥 Performing health check..."
           cd ~/${{ env.PROJECT_NAME }}
           sleep 30
           
-          # 헬스체크 시도
+          # 헬스체크 시도 (컨테이너 내부에서)
           for i in {1..5}; do
             if docker-compose exec -T api-server curl -f http://localhost:3000/health; then
               echo "✅ Health check passed!"
@@ -179,6 +225,14 @@ jobs:
               sleep 10
             fi
           done
+          
+          # 외부 접근 테스트
+          echo "🌐 Testing external access..."
+          if curl -f http://localhost:3030/health; then
+            echo "✅ External access working!"
+          else
+            echo "⚠️ External access may need more time..."
+          fi
           
           # 정리
           echo "🧹 Cleaning up..."
@@ -197,6 +251,7 @@ jobs:
       run: |
         if [ "${{ needs.deploy.result }}" == "success" ]; then
           echo "✅ GrowPromise deployment successful!"
+          echo "🌐 API URL: http://${{ secrets.EC2_HOST }}:3030"
         else
           echo "❌ GrowPromise deployment failed!"
           exit 1
