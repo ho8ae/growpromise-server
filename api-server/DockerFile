@@ -1,24 +1,21 @@
-FROM node:18-alpine
+FROM node:18-slim
+
+# 필요한 패키지 설치
+RUN apt-get update && apt-get install -y \
+    openssl \
+    ca-certificates \
+    && rm -rf /var/lib/apt/lists/*
 
 WORKDIR /app
 
-# OpenSSL 1.1 설치 (핵심 수정)
-RUN apk add --no-cache openssl1.1-compat
-
-# 패키지 파일 복사 및 의존성 설치
 COPY package*.json ./
 RUN npm install
 RUN npm install -g prisma
 
-# 소스 파일 복사
 COPY . ./
 
-# Prisma Client 생성 (linux-musl용)
 RUN npx prisma generate
-
-# 빌드
 RUN npm run build
 
 EXPOSE 3000
-
-CMD ["node", "dist/server.js"]
+CMD ["npm", "start"]
