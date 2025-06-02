@@ -8,7 +8,7 @@ RUN npm install
 RUN npm install -g prisma
 
 # 소스 파일 복사
-COPY . .
+COPY api-server ./
 
 # Prisma 생성 
 RUN npx prisma generate
