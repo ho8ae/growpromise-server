@@ -85,7 +85,7 @@ docker-compose -f docker-compose-ssl.yml run --rm certbot certonly --webroot -w 
   --no-eff-email
 
 # 인증서 발급 성공 확인
-if [ ! -d "./certbot/conf/live/growpromise.co.kr" ]; then
+if ! sudo test -d "./certbot/conf/live/growpromise.com"; then
   echo "Certificate issuance failed. Check logs and DNS settings."
   exit 1
 fi
