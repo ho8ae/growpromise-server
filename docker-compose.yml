@@ -55,5 +55,4 @@ volumes:
 
 networks:
   growpromise-network:
-    driver: bridge
     external: true
