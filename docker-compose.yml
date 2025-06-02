@@ -3,8 +3,8 @@ version: '3.8'
 services:
   api-server:
     build:
-      context: ./server
-      dockerfile: Dockerfile
+      context: ./api-server
+      dockerfile: DockerFile
     container_name: api-server-growpromise
     restart: always
     environment:
