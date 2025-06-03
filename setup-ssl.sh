@@ -37,8 +37,8 @@ services:
     container_name: nginx-growpromise
     restart: always
     ports:
-      - "8080:80"  # 메인 nginx-proxy가 80/443 사용 중이므로 8080 사용
-      - "8443:443"
+      - "80:80"   # Let's Encrypt는 포트 80이 필요
+      - "443:443"
     volumes:
       - ./nginx/conf.d:/etc/nginx/conf.d
       - ./certbot/conf:/etc/letsencrypt
@@ -63,7 +63,7 @@ echo "Waiting for nginx to start..."
 sleep 5
 
 # 외부 접속 테스트 가능한지 안내
-echo "Now, please check if you can access http://growpromise.com:8080 in your browser."
+echo "Now, please check if you can access http://growpromise.com in your browser."
 echo "You should see 'Hello from GrowPromise!' message."
 echo "Wait for DNS propagation if needed (this can take up to 24-48 hours, but usually much less)."
 read -p "Press Enter to continue with SSL certificate installation..." dummy
