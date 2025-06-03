@@ -11,7 +11,7 @@ router.use(authenticate);
 // 아이용 라우트
 router.post('/:ticketId/use', requireChild, ticketController.useTicket);
 router.post('/draw', requireChild, ticketController.drawWithCoin);
-router.get('/', ticketController.getMyTickets);
+router.get('/', requireChild, ticketController.getMyTickets);
 router.get('/stats', requireChild, ticketController.getChildStats);
 
 // 관리자용 라우트 (향후 관리자 미들웨어 추가 필요)
