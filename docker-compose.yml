@@ -1,6 +1,19 @@
 version: '3.8'
 
 services:
+  nginx:
+    image: nginx:alpine
+    container_name: nginx-growpromise
+    restart: always
+    volumes:
+      - ./nginx/conf.d:/etc/nginx/conf.d
+      - ./certbot/conf:/etc/letsencrypt
+      - ./certbot/www:/var/www/certbot
+    depends_on:
+      - api-server
+    networks:
+      - app-network
+
   api-server:
     build:
       context: ./api-server
@@ -10,8 +23,17 @@ services:
     environment:
       - NODE_ENV=production
       - DATABASE_URL=${DATABASE_URL}
-      - JWT_SECRET=${JWT_SECRET}
       - PORT=3000
+      # 필요한 다른 환경 변수들 추가
+    networks:
+      - app-network
+
+  certbot:
+    image: certbot/certbot
+    container_name: certbot-growpromise
+    volumes:
+      - ./certbot/conf:/etc/letsencrypt
+      - ./certbot/www:/var/www/certbot
     networks:
       - app-network
 
