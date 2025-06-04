@@ -508,3 +508,96 @@ export const oauthRedirect = asyncHandler(async (req: Request, res: Response) =>
   const queryParams = new URLSearchParams(req.query as Record<string, string>);
   return res.redirect(`exp://localhost:8081?${queryParams.toString()}`);
 });
+
+/**
+ * 부모의 자녀 목록 조회 (비밀번호 재설정용)
+ * @route GET /api/auth/parent/children-for-reset
+ */
+export const getChildrenForPasswordReset = asyncHandler(async (req: Request, res: Response) => {
+  if (!req.user) {
+    return res.status(401).json({
+      success: false,
+      message: '인증이 필요합니다.'
+    });
+  }
+
+  if (req.user.userType !== 'PARENT') {
+    return res.status(403).json({
+      success: false,
+      message: '부모만 접근할 수 있습니다.'
+    });
+  }
+
+  const children = await authService.getParentChildrenForPasswordReset(req.user.id);
+
+  res.status(200).json({
+    success: true,
+    message: '자녀 목록을 조회했습니다.',
+    data: children
+  });
+});
+
+/**
+ * 자녀 비밀번호 재설정
+ * @route POST /api/auth/parent/reset-child-password
+ */
+export const resetChildPassword = asyncHandler(async (req: Request, res: Response) => {
+  if (!req.user) {
+    return res.status(401).json({
+      success: false,
+      message: '인증이 필요합니다.'
+    });
+  }
+
+  if (req.user.userType !== 'PARENT') {
+    return res.status(403).json({
+      success: false,
+      message: '부모만 접근할 수 있습니다.'
+    });
+  }
+
+  const { childId, newPassword } = req.body;
+
+  const result = await authService.resetChildPasswordByParent(req.user.id, childId, newPassword);
+
+  res.status(200).json({
+    success: true,
+    message: result.message,
+    data: {
+      childUsername: result.childUsername
+    }
+  });
+});
+
+/**
+ * 임시 비밀번호로 자녀 비밀번호 재설정
+ * @route POST /api/auth/parent/reset-child-password-temporary
+ */
+export const resetChildPasswordTemporary = asyncHandler(async (req: Request, res: Response) => {
+  if (!req.user) {
+    return res.status(401).json({
+      success: false,
+      message: '인증이 필요합니다.'
+    });
+  }
+
+  if (req.user.userType !== 'PARENT') {
+    return res.status(403).json({
+      success: false,
+      message: '부모만 접근할 수 있습니다.'
+    });
+  }
+
+  const { childId } = req.body;
+
+  const result = await authService.resetChildPasswordWithTemporary(req.user.id, childId);
+
+  res.status(200).json({
+    success: true,
+    message: result.message,
+    data: {
+      childUsername: result.childUsername,
+      temporaryPassword: result.temporaryPassword
+    }
+  });
+});

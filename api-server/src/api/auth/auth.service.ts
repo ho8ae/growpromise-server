@@ -946,3 +946,160 @@ export const resetPassword = async (resetToken: string, newPassword: string) => 
     message: '비밀번호가 성공적으로 재설정되었습니다.'
   };
 };
+
+
+/**
+ * 부모의 자녀 목록 조회 (비밀번호 재설정용)
+ */
+export const getParentChildrenForPasswordReset = async (parentId: string) => {
+  // 부모 프로필 확인
+  const parentProfile = await prisma.parentProfile.findFirst({
+    where: {
+      user: {
+        id: parentId,
+        isActive: true,
+        userType: UserType.PARENT
+      }
+    }
+  });
+
+  if (!parentProfile) {
+    throw new ApiError('부모 프로필을 찾을 수 없습니다.', 404);
+  }
+
+  // 연결된 자녀 목록 조회
+  const children = await prisma.childParentConnection.findMany({
+    where: {
+      parentId: parentProfile.id
+    },
+    include: {
+      child: {
+        include: {
+          user: {
+            select: {
+              id: true,
+              username: true,
+              profileImage: true,
+              socialProvider: true // 소셜 로그인 계정인지 확인
+            }
+          }
+        }
+      }
+    }
+  });
+
+  // 일반 로그인 계정인 자녀만 필터링 (소셜 로그인은 비밀번호 재설정 불가)
+  const eligibleChildren = children
+    .filter(connection => !connection.child.user.socialProvider)
+    .map(connection => ({
+      childId: connection.child.user.id,
+      childProfileId: connection.child.id,
+      username: connection.child.user.username,
+      profileImage: connection.child.user.profileImage
+    }));
+
+  return eligibleChildren;
+};
+
+/**
+ * 부모를 통한 자녀 비밀번호 재설정
+ */
+export const resetChildPasswordByParent = async (
+  parentId: string,
+  childId: string,
+  newPassword: string
+) => {
+  // 부모 프로필 확인
+  const parentProfile = await prisma.parentProfile.findFirst({
+    where: {
+      user: {
+        id: parentId,
+        isActive: true,
+        userType: UserType.PARENT
+      }
+    }
+  });
+
+  if (!parentProfile) {
+    throw new ApiError('부모 프로필을 찾을 수 없습니다.', 404);
+  }
+
+  // 자녀 정보 확인
+  const childUser = await prisma.user.findFirst({
+    where: {
+      id: childId,
+      isActive: true,
+      userType: UserType.CHILD,
+      socialProvider: null // 일반 로그인 계정만
+    },
+    include: {
+      childProfile: true
+    }
+  });
+
+  if (!childUser || !childUser.childProfile) {
+    throw new ApiError('자녀를 찾을 수 없습니다.', 404);
+  }
+
+  // 부모-자녀 관계 확인
+  const connection = await prisma.childParentConnection.findFirst({
+    where: {
+      parentId: parentProfile.id,
+      childId: childUser.childProfile.id
+    }
+  });
+
+  if (!connection) {
+    throw new ApiError('해당 자녀와 연결되지 않은 부모입니다.', 403);
+  }
+
+  // 새 비밀번호 해싱
+  const hashedPassword = await hashPassword(newPassword);
+
+  // 비밀번호 업데이트
+  await prisma.user.update({
+    where: { id: childId },
+    data: {
+      password: hashedPassword,
+      updatedAt: new Date()
+    }
+  });
+
+  return {
+    message: `${childUser.username}님의 비밀번호가 성공적으로 변경되었습니다.`,
+    childUsername: childUser.username
+  };
+};
+
+/**
+ * 임시 비밀번호 생성 함수
+ */
+export const generateTemporaryPassword = (): string => {
+  // 8자리 임시 비밀번호 생성 (숫자 + 영문자)
+  const chars = 'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789';
+  let tempPassword = '';
+  for (let i = 0; i < 8; i++) {
+    tempPassword += chars.charAt(Math.floor(Math.random() * chars.length));
+  }
+  return tempPassword;
+};
+
+/**
+ * 임시 비밀번호로 자녀 비밀번호 재설정
+ */
+export const resetChildPasswordWithTemporary = async (
+  parentId: string,
+  childId: string
+) => {
+  // 임시 비밀번호 생성
+  const temporaryPassword = generateTemporaryPassword();
+  
+  // 비밀번호 재설정
+  const result = await resetChildPasswordByParent(parentId, childId, temporaryPassword);
+  
+  return {
+    ...result,
+    temporaryPassword,
+    message: `${result.childUsername}님의 임시 비밀번호가 생성되었습니다. 로그인 후 비밀번호를 변경해주세요.`
+  };
+};

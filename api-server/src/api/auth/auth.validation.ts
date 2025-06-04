@@ -176,3 +176,28 @@ export const deleteAccountSchema = Joi.object({
     'any.only': '확인 텍스트가 일치하지 않습니다.'
   })
 });
+
+export const requestChildPasswordResetSchema = Joi.object({
+  childId: Joi.string().required().messages({
+    'string.empty': '자녀 ID는 필수입니다.',
+    'any.required': '자녀 ID는 필수입니다.'
+  })
+});
+
+// 자녀 비밀번호 재설정 실행 (부모용)
+export const resetChildPasswordSchema = Joi.object({
+  childId: Joi.string().required().messages({
+    'string.empty': '자녀 ID는 필수입니다.',
+    'any.required': '자녀 ID는 필수입니다.'
+  }),
+  newPassword: Joi.string().min(6).required().messages({
+    'string.empty': '새 비밀번호는 필수입니다.',
+    'string.min': '새 비밀번호는 최소 6자 이상이어야 합니다.',
+    'any.required': '새 비밀번호는 필수입니다.'
+  }),
+  confirmPassword: Joi.string().valid(Joi.ref('newPassword')).required().messages({
+    'string.empty': '비밀번호 확인은 필수입니다.',
+    'any.only': '비밀번호가 일치하지 않습니다.',
+    'any.required': '비밀번호 확인은 필수입니다.'
+  })
+});

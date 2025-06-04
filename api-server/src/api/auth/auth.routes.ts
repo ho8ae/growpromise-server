@@ -14,7 +14,9 @@ import {
   socialSignInSchema,
   socialSetupSchema,
   setSocialPasswordSchema,
-  deleteAccountSchema
+  deleteAccountSchema,
+  resetChildPasswordSchema,
+  requestChildPasswordResetSchema
 } from './auth.validation';
 
 const router = express.Router();
@@ -45,5 +47,10 @@ router.get('/oauth/redirect', authController.oauthRedirect);
 router.post('/set-social-password', authenticate, validate(setSocialPasswordSchema), authController.setSocialAccountPassword);
 router.post('/deactivate-account', authenticate, validate(deleteAccountSchema), authController.deactivateAccount);
 router.delete('/delete-account', authenticate, validate(deleteAccountSchema), authController.deleteAccount);
+
+router.get('/parent/children-for-reset', authenticate, requireParent, authController.getChildrenForPasswordReset);
+router.post('/parent/reset-child-password', authenticate, requireParent, validate(resetChildPasswordSchema), authController.resetChildPassword);
+router.post('/parent/reset-child-password-temporary', authenticate, requireParent, validate(requestChildPasswordResetSchema), authController.resetChildPasswordTemporary);
+
 
 export default router;
