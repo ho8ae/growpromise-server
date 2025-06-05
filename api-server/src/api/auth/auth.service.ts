@@ -9,12 +9,10 @@ import nodemailer from 'nodemailer';
 import { SocialProvider } from '@prisma/client';
 import { OAuth2Client } from 'google-auth-library';
 
-
-
 // Google OAuth 클라이언트 초기화
 const googleClient = new OAuth2Client(
   process.env.GOOGLE_CLIENT_ID,
-  process.env.GOOGLE_CLIENT_SECRET
+  process.env.GOOGLE_CLIENT_SECRET,
 );
 
 /**
@@ -23,14 +21,17 @@ const googleClient = new OAuth2Client(
 const verifyGoogleToken = async (idToken: string) => {
   try {
     console.log('🔍 Google 토큰 검증 시작...');
-    console.log('- Client ID:', process.env.GOOGLE_CLIENT_ID ? '✅ 설정됨' : '❌ 없음');
+    console.log(
+      '- Client ID:',
+      process.env.GOOGLE_CLIENT_ID ? '✅ 설정됨' : '❌ 없음',
+    );
     console.log('- Token 길이:', idToken.length);
-    
+
     const ticket = await googleClient.verifyIdToken({
       idToken,
       audience: process.env.GOOGLE_CLIENT_ID,
     });
-    
+
     const payload = ticket.getPayload();
     if (!payload) {
       throw new ApiError('Invalid Google token payload', 400);
@@ -39,14 +40,14 @@ const verifyGoogleToken = async (idToken: string) => {
     console.log('✅ Google 토큰 검증 성공:', {
       sub: payload.sub,
       email: payload.email,
-      name: payload.name
+      name: payload.name,
     });
 
     return {
       socialId: payload.sub,
       email: payload.email,
       name: payload.name || payload.email?.split('@')[0] || 'User',
-      profileImage: payload.picture
+      profileImage: payload.picture,
     };
   } catch (error: any) {
     console.error('❌ Google 토큰 검증 실패:', error.message);
@@ -64,19 +65,21 @@ const verifyAppleToken = async (idToken: string, userInfo?: any) => {
     if (parts.length !== 3) {
       throw new Error('Invalid JWT format');
     }
-    
+
     const payload = JSON.parse(Buffer.from(parts[1], 'base64').toString());
-    
+
     return {
       socialId: payload.sub,
       email: payload.email || userInfo?.email,
-      name: userInfo?.fullName?.givenName || userInfo?.email?.split('@')[0] || 'User'
+      name:
+        userInfo?.fullName?.givenName ||
+        userInfo?.email?.split('@')[0] ||
+        'User',
     };
   } catch (error) {
     throw new ApiError('Apple token verification failed', 400);
   }
 };
-
 
 /**
  * 소셜 로그인 - 1단계 (최소 정보로 계정 생성)
@@ -84,10 +87,10 @@ const verifyAppleToken = async (idToken: string, userInfo?: any) => {
 export const socialSignIn = async (
   provider: 'GOOGLE' | 'APPLE',
   idToken: string,
-  userInfo?: any // Apple의 경우 추가 정보
+  userInfo?: any, // Apple의 경우 추가 정보
 ) => {
   let socialData;
-  
+
   // 토큰 검증
   if (provider === 'GOOGLE') {
     socialData = await verifyGoogleToken(idToken);
@@ -99,14 +102,14 @@ export const socialSignIn = async (
   let existingUser = await prisma.user.findFirst({
     where: {
       socialProvider: provider as SocialProvider,
-      socialId: socialData.socialId
-    }
+      socialId: socialData.socialId,
+    },
   });
 
   // 이메일로도 확인 (기존 일반 계정과 연동)
   if (!existingUser && socialData.email) {
     existingUser = await prisma.user.findUnique({
-      where: { email: socialData.email }
+      where: { email: socialData.email },
     });
 
     // 기존 계정을 소셜 계정으로 연동
@@ -116,8 +119,8 @@ export const socialSignIn = async (
         data: {
           socialProvider: provider as SocialProvider,
           socialId: socialData.socialId,
-          // profileImage: socialData.profileImage || existingUser.profileImage 
-        }
+          // profileImage: socialData.profileImage || existingUser.profileImage
+        },
       });
     }
   }
@@ -133,10 +136,10 @@ export const socialSignIn = async (
         email: existingUser.email,
         userType: existingUser.userType,
         setupCompleted: existingUser.setupCompleted,
-        isNewUser: false
+        isNewUser: false,
       },
       token,
-      needsSetup: !existingUser.setupCompleted
+      needsSetup: !existingUser.setupCompleted,
     };
   }
 
@@ -150,8 +153,8 @@ export const socialSignIn = async (
       socialProvider: provider as SocialProvider,
       socialId: socialData.socialId,
       // profileImage: socialData.profileImage,
-      setupCompleted: false // 초기 설정 필요
-    }
+      setupCompleted: false, // 초기 설정 필요
+    },
   });
 
   const token = generateToken(newUser.id, newUser.userType);
@@ -163,10 +166,10 @@ export const socialSignIn = async (
       email: newUser.email,
       userType: newUser.userType,
       setupCompleted: false,
-      isNewUser: true
+      isNewUser: true,
     },
     token,
-    needsSetup: true
+    needsSetup: true,
   };
 };
 
@@ -179,10 +182,10 @@ export const completeSocialSetup = async (
   setupData: {
     birthDate?: Date;
     parentCode?: string;
-  } = {}
+  } = {},
 ) => {
   const user = await prisma.user.findUnique({
-    where: { id: userId }
+    where: { id: userId },
   });
 
   if (!user) {
@@ -199,8 +202,8 @@ export const completeSocialSetup = async (
       where: { id: userId },
       data: {
         userType: userType as UserType,
-        setupCompleted: true
-      }
+        setupCompleted: true,
+      },
     });
 
     let profileId = '';
@@ -210,13 +213,13 @@ export const completeSocialSetup = async (
       // 연결 코드 생성
       let connectionCode = generateRandomCode();
       let existingCode = await prisma.parentProfile.findFirst({
-        where: { connectionCode }
+        where: { connectionCode },
       });
-      
+
       while (existingCode) {
         connectionCode = generateRandomCode();
         existingCode = await prisma.parentProfile.findFirst({
-          where: { connectionCode }
+          where: { connectionCode },
         });
       }
 
@@ -224,10 +227,10 @@ export const completeSocialSetup = async (
         data: {
           userId: user.id,
           connectionCode,
-          connectionCodeExpires: new Date(Date.now() + 5 * 60 * 1000)
-        }
+          connectionCodeExpires: new Date(Date.now() + 5 * 60 * 1000),
+        },
       });
-      
+
       profileId = parentProfile.id;
     } else {
       const childProfile = await prisma.childProfile.create({
@@ -236,8 +239,8 @@ export const completeSocialSetup = async (
           birthDate: setupData.birthDate || null,
           characterStage: 1,
           totalCompletedPlants: 0,
-          wateringStreak: 0
-        }
+          wateringStreak: 0,
+        },
       });
 
       profileId = childProfile.id;
@@ -247,16 +250,16 @@ export const completeSocialSetup = async (
         const parentProfile = await prisma.parentProfile.findFirst({
           where: {
             connectionCode: setupData.parentCode,
-            connectionCodeExpires: { gt: new Date() }
-          }
+            connectionCodeExpires: { gt: new Date() },
+          },
         });
 
         if (parentProfile) {
           await prisma.childParentConnection.create({
             data: {
               childId: childProfile.id,
-              parentId: parentProfile.id
-            }
+              parentId: parentProfile.id,
+            },
           });
         }
       }
@@ -265,7 +268,11 @@ export const completeSocialSetup = async (
     return { user: updatedUser, profileId };
   });
 
-  const token = generateToken(result.user.id, result.user.userType, result.profileId);
+  const token = generateToken(
+    result.user.id,
+    result.user.userType,
+    result.profileId,
+  );
 
   return {
     user: {
@@ -274,26 +281,25 @@ export const completeSocialSetup = async (
       email: result.user.email,
       userType: result.user.userType,
       profileId: result.profileId,
-      setupCompleted: true
+      setupCompleted: true,
     },
-    token
+    token,
   };
 };
-
 
 /**
  * 소셜 계정에 비밀번호 설정
  */
 export const setSocialAccountPassword = async (
   userId: string,
-  newPassword: string
+  newPassword: string,
 ) => {
   // 사용자 조회
   const user = await prisma.user.findUnique({
-    where: { 
+    where: {
       id: userId,
-      isActive: true
-    }
+      isActive: true,
+    },
   });
 
   if (!user) {
@@ -302,7 +308,10 @@ export const setSocialAccountPassword = async (
 
   // 소셜 로그인 사용자만 비밀번호 설정 가능
   if (!user.socialProvider) {
-    throw new ApiError('일반 로그인 사용자는 이 기능을 사용할 수 없습니다.', 400);
+    throw new ApiError(
+      '일반 로그인 사용자는 이 기능을 사용할 수 없습니다.',
+      400,
+    );
   }
 
   // 이미 비밀번호가 설정된 경우
@@ -316,30 +325,27 @@ export const setSocialAccountPassword = async (
   // 비밀번호 설정
   await prisma.user.update({
     where: { id: userId },
-    data: { 
+    data: {
       password: hashedPassword,
-      updatedAt: new Date()
-    }
+      updatedAt: new Date(),
+    },
   });
 
   return {
-    message: '비밀번호가 성공적으로 설정되었습니다.'
+    message: '비밀번호가 성공적으로 설정되었습니다.',
   };
 };
 
 /**
  * 계정 비활성화 (소프트 삭제)
  */
-export const deactivateAccount = async (
-  userId: string,
-  password?: string
-) => {
+export const deactivateAccount = async (userId: string, password?: string) => {
   // 사용자 조회
   const user = await prisma.user.findUnique({
-    where: { 
+    where: {
       id: userId,
-      isActive: true
-    }
+      isActive: true,
+    },
   });
 
   if (!user) {
@@ -360,7 +366,9 @@ export const deactivateAccount = async (
 
   // 계정 비활성화 (username에 삭제 시간 추가로 중복 방지)
   const deletedUsername = `${user.username}_deleted_${Date.now()}`;
-  const deletedEmail = user.email ? `${user.email}_deleted_${Date.now()}` : null;
+  const deletedEmail = user.email
+    ? `${user.email}_deleted_${Date.now()}`
+    : null;
 
   await prisma.user.update({
     where: { id: userId },
@@ -369,28 +377,25 @@ export const deactivateAccount = async (
       email: deletedEmail,
       isActive: false,
       deletedAt: new Date(),
-      updatedAt: new Date()
-    }
+      updatedAt: new Date(),
+    },
   });
 
   return {
-    message: '계정이 성공적으로 비활성화되었습니다.'
+    message: '계정이 성공적으로 비활성화되었습니다.',
   };
 };
 
 /**
  * 계정 완전 삭제
  */
-export const deleteAccount = async (
-  userId: string,
-  password?: string
-) => {
+export const deleteAccount = async (userId: string, password?: string) => {
   // 사용자 조회
   const user = await prisma.user.findUnique({
-    where: { 
+    where: {
       id: userId,
-      isActive: true
-    }
+      isActive: true,
+    },
   });
 
   if (!user) {
@@ -411,11 +416,11 @@ export const deleteAccount = async (
 
   // 계정 완전 삭제 (CASCADE로 관련 데이터도 자동 삭제됨)
   await prisma.user.delete({
-    where: { id: userId }
+    where: { id: userId },
   });
 
   return {
-    message: '계정이 완전히 삭제되었습니다.'
+    message: '계정이 완전히 삭제되었습니다.',
   };
 };
 
@@ -430,21 +435,24 @@ export const hashPassword = async (password: string): Promise<string> => {
 /**
  * 비밀번호 검증
  */
-export const verifyPassword = async (password: string, hashedPassword: string): Promise<boolean> => {
+export const verifyPassword = async (
+  password: string,
+  hashedPassword: string,
+): Promise<boolean> => {
   return bcrypt.compare(password, hashedPassword);
 };
 
 /**
  * JWT 토큰 생성
  */
-export const generateToken = (userId: string, userType: string, profileId?: string): string => {
+export const generateToken = (
+  userId: string,
+  userType: string,
+  profileId?: string,
+): string => {
   const secret = process.env.JWT_SECRET || 'fallback-secret-key';
-  
-  return jwt.sign(
-    { userId, userType, profileId },
-    secret,
-    { expiresIn: '7d' }
-  );
+
+  return jwt.sign({ userId, userType, profileId }, secret, { expiresIn: '7d' });
 };
 
 /**
@@ -466,8 +474,8 @@ export const sendEmail = async (to: string, subject: string, html: string) => {
     port: parseInt(process.env.SMTP_PORT || '2525'),
     auth: {
       user: process.env.SMTP_USER || 'your-mailtrap-user',
-      pass: process.env.SMTP_PASS || 'your-mailtrap-password'
-    }
+      pass: process.env.SMTP_PASS || 'your-mailtrap-password',
+    },
   });
 
   // 이메일 전송
@@ -475,7 +483,7 @@ export const sendEmail = async (to: string, subject: string, html: string) => {
     from: process.env.EMAIL_FROM || '쑥쑥약속 <noreply@growpromise.com>',
     to,
     subject,
-    html
+    html,
   });
 };
 
@@ -485,11 +493,11 @@ export const sendEmail = async (to: string, subject: string, html: string) => {
 export const createParentAccount = async (
   username: string,
   email: string,
-  password: string
+  password: string,
 ) => {
   // 이메일 중복 확인
   const existingUser = await prisma.user.findUnique({
-    where: { email }
+    where: { email },
   });
 
   if (existingUser) {
@@ -507,21 +515,21 @@ export const createParentAccount = async (
         email,
         username,
         password: hashedPassword,
-        userType: UserType.PARENT
-      }
+        userType: UserType.PARENT,
+      },
     });
 
     // 연결 코드 생성 (중복 확인)
     let connectionCode = generateRandomCode();
     let existingCode = await prisma.parentProfile.findFirst({
-      where: { connectionCode }
+      where: { connectionCode },
     });
-    
+
     // 중복된 코드가 있으면 다시 생성
     while (existingCode) {
       connectionCode = generateRandomCode();
       existingCode = await prisma.parentProfile.findFirst({
-        where: { connectionCode }
+        where: { connectionCode },
       });
     }
 
@@ -530,13 +538,13 @@ export const createParentAccount = async (
       data: {
         userId: user.id,
         connectionCode, // 연결 코드 저장
-        connectionCodeExpires: new Date(Date.now() + 5 * 60 * 1000) // 5분 후 만료
-      }
+        connectionCodeExpires: new Date(Date.now() + 5 * 60 * 1000), // 5분 후 만료
+      },
     });
 
     return {
       user,
-      parentProfile
+      parentProfile,
     };
   });
 
@@ -545,7 +553,7 @@ export const createParentAccount = async (
     email: result.user.email,
     username: result.user.username,
     userType: result.user.userType,
-    parentProfileId: result.parentProfile.id
+    parentProfileId: result.parentProfile.id,
   };
 };
 
@@ -556,7 +564,7 @@ export const createChildAccount = async (
   username: string,
   password: string,
   birthDate?: Date,
-  parentCode?: string
+  parentCode?: string,
 ) => {
   // 비밀번호 해싱
   const hashedPassword = await hashPassword(password);
@@ -568,8 +576,8 @@ export const createChildAccount = async (
       data: {
         username,
         password: hashedPassword,
-        userType: UserType.CHILD
-      }
+        userType: UserType.CHILD,
+      },
     });
 
     // 자녀 프로필 생성
@@ -578,9 +586,9 @@ export const createChildAccount = async (
         userId: user.id,
         birthDate: birthDate || null,
         characterStage: 1,
-        totalCompletedPlants: 0,  // 추가된 필드
-        wateringStreak: 0,        // 추가된 필드
-      }
+        totalCompletedPlants: 0, // 추가된 필드
+        wateringStreak: 0, // 추가된 필드
+      },
     });
 
     // 부모 코드가 있는 경우 부모와 연결
@@ -589,24 +597,24 @@ export const createChildAccount = async (
         where: {
           connectionCode: parentCode,
           connectionCodeExpires: {
-            gt: new Date() // 만료되지 않은 코드만
-          }
-        }
+            gt: new Date(), // 만료되지 않은 코드만
+          },
+        },
       });
 
       if (parentProfile) {
         await prisma.childParentConnection.create({
           data: {
             childId: childProfile.id,
-            parentId: parentProfile.id
-          }
+            parentId: parentProfile.id,
+          },
         });
       }
     }
 
     return {
       user,
-      childProfile
+      childProfile,
     };
   });
 
@@ -614,7 +622,7 @@ export const createChildAccount = async (
     id: result.user.id,
     username: result.user.username,
     userType: result.user.userType,
-    childProfileId: result.childProfile.id
+    childProfileId: result.childProfile.id,
   };
 };
 
@@ -630,7 +638,7 @@ export const loginUser = async (
   const user = await prisma.user.findFirst({
     where: {
       username,
-    }
+    },
   });
 
   const userType = user?.userType;
@@ -647,15 +655,15 @@ export const loginUser = async (
 
   // 프로필 정보 가져오기
   let profileId = '';
-  
+
   if (userType === 'PARENT') {
     const parentProfile = await prisma.parentProfile.findUnique({
-      where: { userId: user.id }
+      where: { userId: user.id },
     });
     profileId = parentProfile?.id || '';
   } else {
     const childProfile = await prisma.childProfile.findUnique({
-      where: { userId: user.id }
+      where: { userId: user.id },
     });
     profileId = childProfile?.id || '';
   }
@@ -669,9 +677,9 @@ export const loginUser = async (
       username: user.username,
       email: user.email,
       userType: user.userType,
-      profileId
+      profileId,
     },
-    token
+    token,
   };
 };
 
@@ -683,9 +691,9 @@ export const generateParentConnectionCode = async (parentId: string) => {
   const parentProfile = await prisma.parentProfile.findFirst({
     where: {
       user: {
-        id: parentId
-      }
-    }
+        id: parentId,
+      },
+    },
   });
 
   if (!parentProfile) {
@@ -694,36 +702,39 @@ export const generateParentConnectionCode = async (parentId: string) => {
 
   // 새로운 연결 코드 생성
   const connectionCode = generateRandomCode();
-  
+
   // 만료 시간 설정 (5분)
   const connectionCodeExpires = new Date(Date.now() + 5 * 60 * 1000);
-  
+
   // 프로필 업데이트
   await prisma.parentProfile.update({
     where: { id: parentProfile.id },
     data: {
       connectionCode,
-      connectionCodeExpires
-    }
+      connectionCodeExpires,
+    },
   });
 
   return {
     code: connectionCode,
-    expiresAt: connectionCodeExpires
+    expiresAt: connectionCodeExpires,
   };
 };
 
 /**
  * 자녀 연결하기
  */
-export const connectChildToParent = async (childId: string, parentCode: string) => {
+export const connectChildToParent = async (
+  childId: string,
+  parentCode: string,
+) => {
   // 자녀 프로필 조회
   const childProfile = await prisma.childProfile.findFirst({
     where: {
       user: {
-        id: childId
-      }
-    }
+        id: childId,
+      },
+    },
   });
 
   if (!childProfile) {
@@ -735,9 +746,9 @@ export const connectChildToParent = async (childId: string, parentCode: string) 
     where: {
       connectionCode: parentCode,
       connectionCodeExpires: {
-        gt: new Date() // 만료되지 않은 코드만
-      }
-    }
+        gt: new Date(), // 만료되지 않은 코드만
+      },
+    },
   });
 
   if (!parentProfile) {
@@ -749,9 +760,9 @@ export const connectChildToParent = async (childId: string, parentCode: string) 
     where: {
       childId_parentId: {
         childId: childProfile.id,
-        parentId: parentProfile.id
-      }
-    }
+        parentId: parentProfile.id,
+      },
+    },
   });
 
   if (existingConnection) {
@@ -762,12 +773,12 @@ export const connectChildToParent = async (childId: string, parentCode: string) 
   await prisma.childParentConnection.create({
     data: {
       childId: childProfile.id,
-      parentId: parentProfile.id
-    }
+      parentId: parentProfile.id,
+    },
   });
 
   return {
-    message: '부모와 성공적으로 연결되었습니다.'
+    message: '부모와 성공적으로 연결되었습니다.',
   };
 };
 
@@ -777,11 +788,11 @@ export const connectChildToParent = async (childId: string, parentCode: string) 
 export const changePassword = async (
   userId: string,
   currentPassword: string,
-  newPassword: string
+  newPassword: string,
 ) => {
   // 사용자 조회
   const user = await prisma.user.findUnique({
-    where: { id: userId }
+    where: { id: userId },
   });
 
   if (!user) {
@@ -789,7 +800,10 @@ export const changePassword = async (
   }
 
   // 현재 비밀번호 확인
-  const isPasswordValid = await verifyPassword(currentPassword, user.password || '');
+  const isPasswordValid = await verifyPassword(
+    currentPassword,
+    user.password || '',
+  );
   if (!isPasswordValid) {
     throw new ApiError('현재 비밀번호가 일치하지 않습니다.', 401);
   }
@@ -800,11 +814,11 @@ export const changePassword = async (
   // 비밀번호 업데이트
   await prisma.user.update({
     where: { id: userId },
-    data: { password: hashedPassword }
+    data: { password: hashedPassword },
   });
 
   return {
-    message: '비밀번호가 성공적으로 변경되었습니다.'
+    message: '비밀번호가 성공적으로 변경되었습니다.',
   };
 };
 
@@ -814,7 +828,7 @@ export const changePassword = async (
 export const findUsername = async (email: string) => {
   // 이메일로 사용자 찾기
   const user = await prisma.user.findUnique({
-    where: { email }
+    where: { email },
   });
 
   if (!user) {
@@ -825,7 +839,7 @@ export const findUsername = async (email: string) => {
   return {
     username: user.username,
     userType: user.userType,
-    message: '아이디를 찾았습니다.'
+    message: '아이디를 찾았습니다.',
   };
 };
 
@@ -835,7 +849,7 @@ export const findUsername = async (email: string) => {
 export const generatePasswordResetToken = async (email: string) => {
   // 이메일로 사용자 찾기
   const user = await prisma.user.findUnique({
-    where: { email }
+    where: { email },
   });
 
   if (!user) {
@@ -844,7 +858,7 @@ export const generatePasswordResetToken = async (email: string) => {
 
   // 랜덤 토큰 생성
   const resetToken = crypto.randomBytes(32).toString('hex');
-  
+
   // 토큰 해싱
   const passwordResetToken = crypto
     .createHash('sha256')
@@ -859,17 +873,21 @@ export const generatePasswordResetToken = async (email: string) => {
     where: { id: user.id },
     data: {
       passwordResetToken,
-      passwordResetExpires
-    }
+      passwordResetExpires,
+    },
   });
 
   // 비밀번호 재설정 이메일 전송
-  const resetURL = `${process.env.FRONTEND_URL || 'http://localhost:3000'}/reset-password/${resetToken}`;
-  
+  const resetURL = `${
+    process.env.FRONTEND_URL || 'http://localhost:3000'
+  }/reset-password/${resetToken}`;
+
   const emailHtml = `
     <div style="font-family: Arial, sans-serif; padding: 20px; max-width: 600px; margin: 0 auto;">
       <div style="text-align: center; margin-bottom: 20px;">
-        <img src="${process.env.LOGO_URL || 'https://growpromise.com/logo.png'}" alt="쑥쑥약속 로고" style="width: 100px;">
+        <img src="${
+          process.env.LOGO_URL || 'https://growpromise.com/logo.png'
+        }" alt="쑥쑥약속 로고" style="width: 100px;">
       </div>
       <h2 style="color: #4CAF50; text-align: center;">비밀번호 재설정</h2>
       <p>안녕하세요, ${user.username}님!</p>
@@ -887,9 +905,9 @@ export const generatePasswordResetToken = async (email: string) => {
 
   try {
     await sendEmail(user.email || '', '[쑥쑥약속] 비밀번호 재설정', emailHtml);
-    
+
     return {
-      message: '비밀번호 재설정 이메일이 전송되었습니다.'
+      message: '비밀번호 재설정 이메일이 전송되었습니다.',
     };
   } catch (error) {
     // 이메일 전송 실패 시 토큰 삭제
@@ -897,10 +915,10 @@ export const generatePasswordResetToken = async (email: string) => {
       where: { id: user.id },
       data: {
         passwordResetToken: null,
-        passwordResetExpires: null
-      }
+        passwordResetExpires: null,
+      },
     });
-    
+
     throw new ApiError('이메일 전송에 실패했습니다.', 500);
   }
 };
@@ -908,7 +926,10 @@ export const generatePasswordResetToken = async (email: string) => {
 /**
  * 비밀번호 재설정
  */
-export const resetPassword = async (resetToken: string, newPassword: string) => {
+export const resetPassword = async (
+  resetToken: string,
+  newPassword: string,
+) => {
   // 토큰 해싱
   const hashedToken = crypto
     .createHash('sha256')
@@ -920,9 +941,9 @@ export const resetPassword = async (resetToken: string, newPassword: string) => 
     where: {
       passwordResetToken: hashedToken,
       passwordResetExpires: {
-        gt: new Date() // 만료되지 않은 토큰만
-      }
-    }
+        gt: new Date(), // 만료되지 않은 토큰만
+      },
+    },
   });
 
   if (!user) {
@@ -938,31 +959,29 @@ export const resetPassword = async (resetToken: string, newPassword: string) => 
     data: {
       password: hashedPassword,
       passwordResetToken: null,
-      passwordResetExpires: null
-    }
+      passwordResetExpires: null,
+    },
   });
 
   return {
-    message: '비밀번호가 성공적으로 재설정되었습니다.'
+    message: '비밀번호가 성공적으로 재설정되었습니다.',
   };
 };
 
-
 /**
- * 부모의 자녀 목록 조회 (비밀번호 재설정용) - 수정된 버전
+ * 부모의 자녀 목록 조회 (비밀번호 재설정용) - User API 방식으로 단순화
  */
 export const getParentChildrenForPasswordReset = async (parentId: string) => {
-  console.log('🔍 부모 ID로 자녀 목록 조회 시작:', parentId);
-  
-  // 부모 프로필 확인
+  console.log('🔍 자녀 목록 조회 시작, parentId:', parentId);
+
+  // 1단계: 부모 프로필 확인 (User API와 동일한 방식)
   const parentProfile = await prisma.parentProfile.findFirst({
     where: {
       user: {
         id: parentId,
         isActive: true,
-        userType: UserType.PARENT
-      }
-    }
+      },
+    },
   });
 
   if (!parentProfile) {
@@ -972,52 +991,45 @@ export const getParentChildrenForPasswordReset = async (parentId: string) => {
 
   console.log('✅ 부모 프로필 찾음:', parentProfile.id);
 
-  // 🔥 올바른 쿼리: 관계를 단계별로 따라가기
+  // 2단계: 자녀 목록 조회 (User API와 동일한 방식)
   const childConnections = await prisma.childParentConnection.findMany({
     where: {
-      parentId: parentProfile.id
+      parentId: parentProfile.id,
     },
     include: {
       child: {
         include: {
-          user: true // ✅ ChildProfile -> User 관계 사용
-        }
-      }
-    }
+          user: {
+            select: {
+              id: true,
+              username: true,
+              profileImage: true,
+              socialProvider: true, // 🔥 소셜 로그인 여부 확인용
+            },
+          },
+        },
+      },
+    },
   });
 
-  console.log('🔍 연결된 자녀 수:', childConnections.length);
-  console.log('🔍 연결 데이터:', childConnections.map(conn => ({
-    childProfileId: conn.child.id,
-    userId: conn.child.user.id,
-    username: conn.child.user.username,
-    socialProvider: conn.child.user.socialProvider
-  })));
+  console.log('✅ 연결된 자녀 수:', childConnections.length);
 
-  // 일반 로그인 계정인 자녀만 필터링 (소셜 로그인은 비밀번호 재설정 불가)
+  // 3단계: 일반 로그인 자녀만 필터링 (소셜 로그인 제외)
   const eligibleChildren = childConnections
-    .filter(connection => {
-      const isEligible = connection.child && 
-                        connection.child.user && 
-                        !connection.child.user.socialProvider; // 소셜 로그인이 아닌 경우만
-      
-      console.log('🔍 자녀 필터링:', {
-        username: connection.child?.user?.username,
-        socialProvider: connection.child?.user?.socialProvider,
-        isEligible
-      });
-      
-      return isEligible;
-    })
-    .map(connection => ({
-      childId: connection.child.user.id,        // ✅ User.id
-      childProfileId: connection.child.id,      // ✅ ChildProfile.id
-      username: connection.child.user.username, // ✅ User.username
-      profileImage: connection.child.user.profileImage // ✅ User.profileImage
+    .filter(
+      (connection) =>
+        connection.child &&
+        connection.child.user &&
+        !connection.child.user.socialProvider, // 소셜 로그인이 아닌 경우만
+    )
+    .map((connection) => ({
+      childId: connection.child.user.id, // User.id
+      childProfileId: connection.child.id, // ChildProfile.id
+      username: connection.child.user.username,
+      profileImage: connection.child.user.profileImage,
     }));
 
-  console.log('✅ 비밀번호 재설정 가능한 자녀 수:', eligibleChildren.length);
-  console.log('✅ 최종 자녀 목록:', eligibleChildren);
+  console.log('✅ 비밀번호 재설정 가능한 자녀:', eligibleChildren);
 
   return eligibleChildren;
 };
@@ -1028,7 +1040,7 @@ export const getParentChildrenForPasswordReset = async (parentId: string) => {
 export const resetChildPasswordByParent = async (
   parentId: string,
   childId: string,
-  newPassword: string
+  newPassword: string,
 ) => {
   // 부모 프로필 확인
   const parentProfile = await prisma.parentProfile.findFirst({
@@ -1036,9 +1048,9 @@ export const resetChildPasswordByParent = async (
       user: {
         id: parentId,
         isActive: true,
-        userType: UserType.PARENT
-      }
-    }
+        userType: UserType.PARENT,
+      },
+    },
   });
 
   if (!parentProfile) {
@@ -1051,11 +1063,11 @@ export const resetChildPasswordByParent = async (
       id: childId,
       isActive: true,
       userType: UserType.CHILD,
-      socialProvider: null // 일반 로그인 계정만
+      socialProvider: null, // 일반 로그인 계정만
     },
     include: {
-      childProfile: true
-    }
+      childProfile: true,
+    },
   });
 
   if (!childUser || !childUser.childProfile) {
@@ -1066,8 +1078,8 @@ export const resetChildPasswordByParent = async (
   const connection = await prisma.childParentConnection.findFirst({
     where: {
       parentId: parentProfile.id,
-      childId: childUser.childProfile.id
-    }
+      childId: childUser.childProfile.id,
+    },
   });
 
   if (!connection) {
@@ -1082,13 +1094,13 @@ export const resetChildPasswordByParent = async (
     where: { id: childId },
     data: {
       password: hashedPassword,
-      updatedAt: new Date()
-    }
+      updatedAt: new Date(),
+    },
   });
 
   return {
     message: `${childUser.username}님의 비밀번호가 성공적으로 변경되었습니다.`,
-    childUsername: childUser.username
+    childUsername: childUser.username,
   };
 };
 
@@ -1097,7 +1109,8 @@ export const resetChildPasswordByParent = async (
  */
 export const generateTemporaryPassword = (): string => {
   // 8자리 임시 비밀번호 생성 (숫자 + 영문자)
-  const chars = 'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789';
+  const chars =
+    'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789';
   let tempPassword = '';
   for (let i = 0; i < 8; i++) {
     tempPassword += chars.charAt(Math.floor(Math.random() * chars.length));
@@ -1110,17 +1123,21 @@ export const generateTemporaryPassword = (): string => {
  */
 export const resetChildPasswordWithTemporary = async (
   parentId: string,
-  childId: string
+  childId: string,
 ) => {
   // 임시 비밀번호 생성
   const temporaryPassword = generateTemporaryPassword();
-  
+
   // 비밀번호 재설정
-  const result = await resetChildPasswordByParent(parentId, childId, temporaryPassword);
-  
+  const result = await resetChildPasswordByParent(
+    parentId,
+    childId,
+    temporaryPassword,
+  );
+
   return {
     ...result,
     temporaryPassword,
-    message: `${result.childUsername}님의 임시 비밀번호가 생성되었습니다. 로그인 후 비밀번호를 변경해주세요.`
+    message: `${result.childUsername}님의 임시 비밀번호가 생성되었습니다. 로그인 후 비밀번호를 변경해주세요.`,
   };
 };
