@@ -949,9 +949,11 @@ export const resetPassword = async (resetToken: string, newPassword: string) => 
 
 
 /**
- * 부모의 자녀 목록 조회 (비밀번호 재설정용)
+ * 부모의 자녀 목록 조회 (비밀번호 재설정용) - 수정된 버전
  */
 export const getParentChildrenForPasswordReset = async (parentId: string) => {
+  console.log('🔍 부모 ID로 자녀 목록 조회 시작:', parentId);
+  
   // 부모 프로필 확인
   const parentProfile = await prisma.parentProfile.findFirst({
     where: {
@@ -964,39 +966,58 @@ export const getParentChildrenForPasswordReset = async (parentId: string) => {
   });
 
   if (!parentProfile) {
+    console.error('❌ 부모 프로필을 찾을 수 없음');
     throw new ApiError('부모 프로필을 찾을 수 없습니다.', 404);
   }
 
-  // 연결된 자녀 목록 조회
-  const children = await prisma.childParentConnection.findMany({
+  console.log('✅ 부모 프로필 찾음:', parentProfile.id);
+
+  // 🔥 올바른 쿼리: 관계를 단계별로 따라가기
+  const childConnections = await prisma.childParentConnection.findMany({
     where: {
       parentId: parentProfile.id
     },
     include: {
       child: {
         include: {
-          user: {
-            select: {
-              id: true,
-              username: true,
-              profileImage: true,
-              socialProvider: true // 소셜 로그인 계정인지 확인
-            }
-          }
+          user: true // ✅ ChildProfile -> User 관계 사용
         }
       }
     }
   });
 
+  console.log('🔍 연결된 자녀 수:', childConnections.length);
+  console.log('🔍 연결 데이터:', childConnections.map(conn => ({
+    childProfileId: conn.child.id,
+    userId: conn.child.user.id,
+    username: conn.child.user.username,
+    socialProvider: conn.child.user.socialProvider
+  })));
+
   // 일반 로그인 계정인 자녀만 필터링 (소셜 로그인은 비밀번호 재설정 불가)
-  const eligibleChildren = children
-    .filter(connection => !connection.child.user.socialProvider)
+  const eligibleChildren = childConnections
+    .filter(connection => {
+      const isEligible = connection.child && 
+                        connection.child.user && 
+                        !connection.child.user.socialProvider; // 소셜 로그인이 아닌 경우만
+      
+      console.log('🔍 자녀 필터링:', {
+        username: connection.child?.user?.username,
+        socialProvider: connection.child?.user?.socialProvider,
+        isEligible
+      });
+      
+      return isEligible;
+    })
     .map(connection => ({
-      childId: connection.child.user.id,
-      childProfileId: connection.child.id,
-      username: connection.child.user.username,
-      profileImage: connection.child.user.profileImage
+      childId: connection.child.user.id,        // ✅ User.id
+      childProfileId: connection.child.id,      // ✅ ChildProfile.id
+      username: connection.child.user.username, // ✅ User.username
+      profileImage: connection.child.user.profileImage // ✅ User.profileImage
     }));
+
+  console.log('✅ 비밀번호 재설정 가능한 자녀 수:', eligibleChildren.length);
+  console.log('✅ 최종 자녀 목록:', eligibleChildren);
 
   return eligibleChildren;
 };
