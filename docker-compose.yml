@@ -24,7 +24,6 @@ services:
       - NODE_ENV=production
       - DATABASE_URL=${DATABASE_URL}
       - PORT=3000
-      # 필요한 다른 환경 변수들 추가
     networks:
       - app-network
 
