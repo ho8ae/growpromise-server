@@ -20,6 +20,8 @@ services:
       dockerfile: Dockerfile
     container_name: api-server-growpromise
     restart: always
+    env_file:
+      - .env   
     environment:
       - NODE_ENV=production
       - DATABASE_URL=${DATABASE_URL}
