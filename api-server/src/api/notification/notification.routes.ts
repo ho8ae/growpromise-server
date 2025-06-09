@@ -17,13 +17,13 @@ router.use(authenticate);
 router.get('/', validate(getNotificationsSchema, 'query'), notificationController.getNotifications);
 router.get('/:id', notificationController.getNotificationById);
 
-// 알림 읽음 상태 업데이트 라우트
-router.put('/:id/read', validate(updateNotificationReadStatusSchema), notificationController.updateNotificationReadStatus);
-router.put('/batch/read', validate(updateMultipleNotificationsSchema), notificationController.updateMultipleNotificationsReadStatus);
+// 읽기 관련 라우트
 router.put('/all/read', notificationController.markAllNotificationsAsRead);
+router.put('/batch/read', validate(updateMultipleNotificationsSchema), notificationController.updateMultipleNotificationsReadStatus);
+router.put('/:id/read', validate(updateNotificationReadStatusSchema), notificationController.updateNotificationReadStatus);
 
 // 알림 삭제 라우트
-router.delete('/:id', notificationController.deleteNotification);
 router.delete('/all', notificationController.deleteAllNotifications);
+router.delete('/:id', notificationController.deleteNotification);
 
 export default router;
