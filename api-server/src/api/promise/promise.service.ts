@@ -10,7 +10,6 @@ import { addDays, addMonths, addWeeks, format } from 'date-fns';
 import * as plantService from '../plant/plant.service';
 import * as ticketService from '../ticket/ticket.service';
 
-
 /**
  * 부모 프로필 ID 조회
  */
@@ -123,16 +122,15 @@ export const getPromiseWithAssignments = async (promiseId: string) => {
                 select: {
                   id: true,
                   username: true,
-                }
-              }
-            }
-          }
-        }
-      }
-    }
+                },
+              },
+            },
+          },
+        },
+      },
+    },
   });
 };
-
 
 /**
  * 약속 할당 생성 (내부 함수)
@@ -514,16 +512,14 @@ export const deletePromise = async (promiseId: string, userId: string) => {
   });
 };
 
-
-
 /**
- * 약속 인증 제출 
+ * 약속 인증 제출
  */
 export const submitVerification = async (
   promiseAssignmentId: string,
   userId: string,
   imagePath: string,
-  verificationDescription: string | null
+  verificationDescription: string | null,
 ) => {
   const childProfileId = await getChildProfileId(userId);
 
@@ -539,11 +535,11 @@ export const submitVerification = async (
                 select: {
                   id: true,
                   username: true,
-                }
-              }
-            }
-          }
-        }
+                },
+              },
+            },
+          },
+        },
       },
       child: {
         include: {
@@ -551,10 +547,10 @@ export const submitVerification = async (
             select: {
               id: true,
               username: true,
-            }
-          }
-        }
-      }
+            },
+          },
+        },
+      },
     },
   });
 
@@ -586,7 +582,7 @@ export const submitVerification = async (
       },
     });
 
-    // 2. 부모에게 알림 전송 
+    // 2. 부모에게 알림 전송
     try {
       await prisma.notification.create({
         data: {
@@ -595,11 +591,13 @@ export const submitVerification = async (
           content: `${promiseAssignment.child.user.username}님이 "${promiseAssignment.promise.title}" 약속을 인증했어요.`,
           notificationType: 'PROMISE_VERIFIED',
           relatedId: promiseAssignment.promise.id,
-          isRead: false
-        }
+          isRead: false,
+        },
       });
 
-      console.log(`✅ 부모 ${promiseAssignment.promise.parent.user.username}에게 인증 알림 전송 완료`);
+      console.log(
+        `✅ 부모 ${promiseAssignment.promise.parent.user.username}에게 인증 알림 전송 완료`,
+      );
     } catch (error) {
       console.error('❌ 부모 알림 전송 실패:', error);
       // 알림 실패해도 인증은 성공하도록 계속 진행
@@ -612,7 +610,6 @@ export const submitVerification = async (
     };
   });
 };
-
 
 /**
  * 약속 인증 응답 (승인/거절) - 티켓 시스템 연동 버전
@@ -696,7 +693,9 @@ export const respondToVerification = async (
     if (approved) {
       // 🎯 티켓 시스템 연동: 약속 인증 완료 카운트 증가 및 보상 체크
       try {
-        await ticketService.handleVerificationComplete(promiseAssignment.childId);
+        await ticketService.handleVerificationComplete(
+          promiseAssignment.childId,
+        );
       } catch (error) {
         console.error('티켓 시스템 처리 오류:', error);
         // 티켓 시스템 오류가 발생해도 전체 트랜잭션을 실패하지 않도록 무시
@@ -999,11 +998,12 @@ export const getPromiseAssignmentsByChild = async (
   });
 };
 
-
 /**
  * 약속의 부모 사용자 ID 조회 (알림용)
  */
-export const getPromiseParentUserId = async (promiseId: string): Promise<string | null> => {
+export const getPromiseParentUserId = async (
+  promiseId: string,
+): Promise<string | null> => {
   try {
     const promise = await prisma.promiseTask.findUnique({
       where: { id: promiseId },
@@ -1011,11 +1011,11 @@ export const getPromiseParentUserId = async (promiseId: string): Promise<string 
         parent: {
           include: {
             user: {
-              select: { id: true }
-            }
-          }
-        }
-      }
+              select: { id: true },
+            },
+          },
+        },
+      },
     });
 
     return promise?.parent.user.id || null;
@@ -1028,7 +1028,9 @@ export const getPromiseParentUserId = async (promiseId: string): Promise<string 
 /**
  * 약속 할당의 자녀 사용자 ID 조회 (알림용)
  */
-export const getPromiseAssignmentChildUserId = async (assignmentId: string): Promise<string | null> => {
+export const getPromiseAssignmentChildUserId = async (
+  assignmentId: string,
+): Promise<string | null> => {
   try {
     const assignment = await prisma.promiseAssignment.findUnique({
       where: { id: assignmentId },
@@ -1036,11 +1038,11 @@ export const getPromiseAssignmentChildUserId = async (assignmentId: string): Pro
         child: {
           include: {
             user: {
-              select: { id: true }
-            }
-          }
-        }
-      }
+              select: { id: true },
+            },
+          },
+        },
+      },
     });
 
     return assignment?.child.user.id || null;
@@ -1053,7 +1055,9 @@ export const getPromiseAssignmentChildUserId = async (assignmentId: string): Pro
 /**
  * 약속 할당에서 부모-자녀 사용자 ID들 조회 (알림용)
  */
-export const getPromiseAssignmentUserIds = async (assignmentId: string): Promise<{
+export const getPromiseAssignmentUserIds = async (
+  assignmentId: string,
+): Promise<{
   parentUserId: string | null;
   childUserId: string | null;
   promiseTitle: string | null;
@@ -1066,22 +1070,25 @@ export const getPromiseAssignmentUserIds = async (assignmentId: string): Promise
           include: {
             parent: {
               include: {
-                user: { select: { id: true } }
-              }
-            }
+                user: {
+                  select: {
+                    id: true,
+                  },
+                },
+              },
+            },
           },
-          select: {
-            id: true,
-            title: true,
-            parent: true
-          }
         },
         child: {
           include: {
-            user: { select: { id: true } }
-          }
-        }
-      }
+            user: {
+              select: {
+                id: true,
+              },
+            },
+          },
+        },
+      },
     });
 
     if (!assignment) {
@@ -1089,9 +1096,9 @@ export const getPromiseAssignmentUserIds = async (assignmentId: string): Promise
     }
 
     return {
-      parentUserId: assignment.promise.parent.userId,
+      parentUserId: assignment.promise.parent.user.id,
       childUserId: assignment.child.user.id,
-      promiseTitle: assignment.promise.title
+      promiseTitle: assignment.promise.title,
     };
   } catch (error) {
     console.error('약속 할당 사용자 ID들 조회 실패:', error);
