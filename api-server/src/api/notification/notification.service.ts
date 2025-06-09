@@ -63,7 +63,7 @@ export const createPromiseNotification = async (
     },
     verified: {
       title: '약속 인증을 확인해주세요! 📸', 
-      content: `아이가 "${promiseTitle}" 약속을 인증했어요.`,
+      content: `자녀가 "${promiseTitle}" 약속을 인증했어요.`,
       notificationType: NotificationType.PROMISE_VERIFIED
     },
     approved: {

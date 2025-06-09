@@ -523,34 +523,11 @@ export const submitVerification = async (
 ) => {
   const childProfileId = await getChildProfileId(userId);
 
-  // 약속 할당 확인 - 부모 정보도 함께 조회
+  // 약속 할당 확인
   const promiseAssignment = await prisma.promiseAssignment.findUnique({
     where: { id: promiseAssignmentId },
     include: {
-      promise: {
-        include: {
-          parent: {
-            include: {
-              user: {
-                select: {
-                  id: true,
-                  username: true,
-                },
-              },
-            },
-          },
-        },
-      },
-      child: {
-        include: {
-          user: {
-            select: {
-              id: true,
-              username: true,
-            },
-          },
-        },
-      },
+      promise: true,
     },
   });
 
@@ -566,49 +543,25 @@ export const submitVerification = async (
     throw new ApiError('이미 인증이 제출된 약속입니다.', 400);
   }
 
-  // 트랜잭션으로 인증 제출 + 알림 전송
-  return await prisma.$transaction(async (prisma) => {
-    // 1. 약속 할당 업데이트
-    const updatedAssignment = await prisma.promiseAssignment.update({
-      where: { id: promiseAssignmentId },
-      data: {
-        status: PromiseStatus.SUBMITTED,
-        verificationImage: imagePath,
-        verificationTime: new Date(),
-        verificationDescription: verificationDescription,
-      },
-      include: {
-        promise: true,
-      },
-    });
-
-    // 2. 부모에게 알림 전송
-    try {
-      await prisma.notification.create({
-        data: {
-          userId: promiseAssignment.promise.parent.user.id, // 부모 사용자 ID
-          title: '약속 인증을 확인해주세요! 📸',
-          content: `${promiseAssignment.child.user.username}님이 "${promiseAssignment.promise.title}" 약속을 인증했어요.`,
-          notificationType: 'PROMISE_VERIFIED',
-          relatedId: promiseAssignment.promise.id,
-          isRead: false,
-        },
-      });
-
-      console.log(
-        `✅ 부모 ${promiseAssignment.promise.parent.user.username}에게 인증 알림 전송 완료`,
-      );
-    } catch (error) {
-      console.error('❌ 부모 알림 전송 실패:', error);
-      // 알림 실패해도 인증은 성공하도록 계속 진행
-    }
-
-    // promiseId를 포함한 객체 반환
-    return {
-      ...updatedAssignment,
-      promiseId: updatedAssignment.promise.id,
-    };
+  // 약속 할당 업데이트 (알림 코드 제거)
+  const updatedAssignment = await prisma.promiseAssignment.update({
+    where: { id: promiseAssignmentId },
+    data: {
+      status: PromiseStatus.SUBMITTED,
+      verificationImage: imagePath,
+      verificationTime: new Date(),
+      verificationDescription: verificationDescription,
+    },
+    include: {
+      promise: true,
+    },
   });
+
+  // promiseId를 포함한 객체 반환
+  return {
+    ...updatedAssignment,
+    promiseId: updatedAssignment.promise.id,
+  };
 };
 
 /**
