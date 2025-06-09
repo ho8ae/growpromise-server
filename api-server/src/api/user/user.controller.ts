@@ -1,6 +1,9 @@
+import { prisma } from '../../app';
 import { Request, Response } from 'express';
 import { asyncHandler } from '../../middleware/error.middleware';
 import * as userService from './user.service';
+import pushNotificationService from '../../utils/pushNotificationService';
+
 // import { uploadFileToS3 } from '../../middleware/upload.middleware';
 
 /**
@@ -258,6 +261,161 @@ export const getUserAccountStatus = asyncHandler(async (req: Request, res: Respo
     message: '계정 상태 정보를 조회했습니다.',
     data: status
   });
+});
+
+
+
+/**
+ * 푸시 토큰 저장/업데이트
+ * @route POST /api/users/push-token
+ */
+export const updatePushToken = asyncHandler(async (req: Request, res: Response) => {
+  if (!req.user) {
+    return res.status(401).json({
+      success: false,
+      message: '인증이 필요합니다.'
+    });
+  }
+
+  const { expoPushToken } = req.body;
+
+  if (!expoPushToken) {
+    return res.status(400).json({
+      success: false,
+      message: '푸시 토큰이 필요합니다.'
+    });
+  }
+
+  try {
+    await pushNotificationService.saveUserPushToken(req.user.id, expoPushToken);
+
+    res.status(200).json({
+      success: true,
+      message: '푸시 토큰이 성공적으로 저장되었습니다.'
+    });
+  } catch (error) {
+    console.error('푸시 토큰 저장 오류:', error);
+    res.status(400).json({
+      success: false,
+      message: '유효하지 않은 푸시 토큰입니다.'
+    });
+  }
+});
+
+/**
+ * 알림 설정 업데이트
+ * @route PATCH /api/users/notification-settings
+ */
+export const updateNotificationSettings = asyncHandler(async (req: Request, res: Response) => {
+  if (!req.user) {
+    return res.status(401).json({
+      success: false,
+      message: '인증이 필요합니다.'
+    });
+  }
+
+  const { enabled } = req.body;
+
+  if (typeof enabled !== 'boolean') {
+    return res.status(400).json({
+      success: false,
+      message: '알림 설정 값이 유효하지 않습니다.'
+    });
+  }
+
+  try {
+    await pushNotificationService.updateNotificationSettings(req.user.id, enabled);
+
+    res.status(200).json({
+      success: true,
+      message: `알림이 ${enabled ? '활성화' : '비활성화'}되었습니다.`
+    });
+  } catch (error) {
+    console.error('알림 설정 업데이트 오류:', error);
+    res.status(500).json({
+      success: false,
+      message: '알림 설정 업데이트에 실패했습니다.'
+    });
+  }
+});
+
+/**
+ * 테스트 푸시 알림 전송
+ * @route POST /api/users/test-push
+ */
+export const sendTestPushNotification = asyncHandler(async (req: Request, res: Response) => {
+  if (!req.user) {
+    return res.status(401).json({
+      success: false,
+      message: '인증이 필요합니다.'
+    });
+  }
+
+  try {
+    await pushNotificationService.sendPushNotification(
+      req.user.id,
+      '테스트 알림 🎯',
+      '푸시 알림이 정상적으로 작동합니다!',
+      { test: true, timestamp: new Date().toISOString() }
+    );
+
+    res.status(200).json({
+      success: true,
+      message: '테스트 푸시 알림이 전송되었습니다.'
+    });
+  } catch (error) {
+    console.error('테스트 푸시 알림 전송 오류:', error);
+    res.status(500).json({
+      success: false,
+      message: '테스트 푸시 알림 전송에 실패했습니다.'
+    });
+  }
+});
+
+/**
+ * 사용자 알림 설정 조회
+ * @route GET /api/users/notification-settings
+ */
+export const getNotificationSettings = asyncHandler(async (req: Request, res: Response) => {
+  if (!req.user) {
+    return res.status(401).json({
+      success: false,
+      message: '인증이 필요합니다.'
+    });
+  }
+
+  try {
+    const user = await prisma.user.findUnique({
+      where: { id: req.user.id },
+      select: {
+        expoPushToken: true,
+        notificationEnabled: true,
+        pushTokenUpdatedAt: true
+      }
+    });
+
+    if (!user) {
+      return res.status(404).json({
+        success: false,
+        message: '사용자를 찾을 수 없습니다.'
+      });
+    }
+
+    res.status(200).json({
+      success: true,
+      data: {
+        hasToken: !!user.expoPushToken,
+        isEnabled: user.notificationEnabled,
+        lastUpdated: user.pushTokenUpdatedAt
+      }
+    });
+  } catch (error) {
+    console.error('알림 설정 조회 오류:', error);
+    res.status(500).json({
+      success: false,
+      message: '알림 설정 조회에 실패했습니다.'
+    });
+  }
 });
 
 /* 

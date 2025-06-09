@@ -68,3 +68,20 @@ export const getUsersQuerySchema = Joi.object({
     'number.min': '오프셋은 0 이상이어야 합니다.'
   })
 });
+
+//  푸시 토큰 업데이트 유효성 검사 스키마
+export const updatePushTokenSchema = Joi.object({
+  expoPushToken: Joi.string().required().messages({
+    'string.base': '푸시 토큰은 문자열이어야 합니다.',
+    'string.empty': '푸시 토큰은 필수입니다.',
+    'any.required': '푸시 토큰은 필수입니다.'
+  })
+});
+
+// 알림 설정 업데이트 유효성 검사 스키마
+export const updateNotificationSettingsSchema = Joi.object({
+  enabled: Joi.boolean().required().messages({
+    'boolean.base': '알림 설정은 불리언 값이어야 합니다.',
+    'any.required': '알림 설정은 필수입니다.'
+  })
+});

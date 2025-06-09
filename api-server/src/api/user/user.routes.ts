@@ -6,7 +6,9 @@ import { authenticate } from '../../middleware/auth.middleware';
 import { 
   updateProfileSchema, 
   updateDetailProfileSchema,
-  selectAvatarSchema
+  selectAvatarSchema,
+  updatePushTokenSchema,
+  updateNotificationSettingsSchema
 } from './user.validation';
 
 const router = express.Router();
@@ -28,6 +30,12 @@ router.put('/profile/avatar', validate(selectAvatarSchema), userController.selec
 
 // 계정 상태 조회
 router.get('/account-status', userController.getUserAccountStatus);
+
+// 푸시 알림 관련 라우트 추가
+router.post('/push-token', validate(updatePushTokenSchema), userController.updatePushToken);
+router.get('/notification-settings', userController.getNotificationSettings);
+router.put('/notification-settings', validate(updateNotificationSettingsSchema), userController.updateNotificationSettings);
+router.post('/test-push', userController.sendTestPushNotification);
 
 // 관계 라우트  
 router.get('/children', userController.getParentChildren);
