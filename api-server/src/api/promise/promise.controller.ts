@@ -3,6 +3,7 @@ import { Request, Response } from 'express';
 import { asyncHandler } from '../../middleware/error.middleware';
 import * as promiseService from './promise.service';
 import { RepeatType } from '@prisma/client';
+import * as notificationService from '../notification/notification.service';
 
 /**
  * 약속 생성
@@ -32,6 +33,33 @@ export const createPromise = asyncHandler(
       endDateObj,
       childIds,
     );
+    // 🔥 자녀들에게 알림 전송
+
+    try {
+      // 생성된 약속의 할당 정보를 다시 조회
+      const promiseWithAssignments =
+        await promiseService.getPromiseWithAssignments(result.id);
+
+      if (
+        promiseWithAssignments?.assignments &&
+        promiseWithAssignments.assignments.length > 0
+      ) {
+        for (const assignment of promiseWithAssignments.assignments) {
+          try {
+            await notificationService.createPromiseNotification(
+              assignment.child.user.id,
+              title,
+              'created',
+              result.id,
+            );
+          } catch (error) {
+            console.error('약속 생성 알림 전송 실패:', error);
+          }
+        }
+      }
+    } catch (error) {
+      console.error('약속 할당 정보 조회 실패:', error);
+    }
 
     res.status(201).json({
       success: true,
@@ -233,6 +261,24 @@ export const submitVerification = asyncHandler(async (req: any, res: any) => {
     verificationDescription || null, // 설명이 없으면 null 처리
   );
 
+  try {
+    // 약속 할당 정보로부터 약속 정보 가져오기
+    const assignmentInfo = await promiseService.getPromiseAssignmentUserIds(
+      promiseAssignmentId,
+    );
+
+    if (assignmentInfo.parentUserId && assignmentInfo.promiseTitle) {
+      await notificationService.createPromiseNotification(
+        assignmentInfo.parentUserId,
+        assignmentInfo.promiseTitle,
+        'verified',
+        result.promiseId
+      );
+    }
+  } catch (error) {
+    console.error('약속 인증 알림 전송 실패:', error);
+  }
+
   res.status(200).json({
     success: true,
     message: '약속 인증이 성공적으로 제출되었습니다.',
@@ -244,32 +290,54 @@ export const submitVerification = asyncHandler(async (req: any, res: any) => {
  * 약속 인증 응답 (승인/거절)
  * @route POST /api/promises/verify/respond/:id
  */
-export const respondToVerification = asyncHandler(async (req: Request, res: Response) => {
-  if (!req.user) {
-    return res.status(401).json({
-      success: false,
-      message: '인증이 필요합니다.'
+export const respondToVerification = asyncHandler(
+  async (req: Request, res: Response) => {
+    if (!req.user) {
+      return res.status(401).json({
+        success: false,
+        message: '인증이 필요합니다.',
+      });
+    }
+
+    const { id } = req.params;
+    const { approved, rejectionReason } = req.body;
+
+    const result = await promiseService.respondToVerification(
+      id,
+      req.user.id,
+      approved,
+      rejectionReason,
+    );
+
+    try {
+      const assignmentInfo = await promiseService.getPromiseAssignmentUserIds(id);
+      
+      if (assignmentInfo.childUserId && assignmentInfo.promiseTitle) {
+        await notificationService.createPromiseNotification(
+          assignmentInfo.childUserId,
+          assignmentInfo.promiseTitle,
+          approved ? 'approved' : 'rejected',
+          result.promiseAssignment.promiseId
+        );
+      }
+    } catch (error) {
+      console.error('약속 응답 알림 전송 실패:', error);
+    }
+
+    // 응답 메시지에 경험치 획득 정보 포함
+    const message = approved
+      ? result.experienceGained > 0
+        ? `약속 인증이 승인되었습니다. 아이의 식물에 ${result.experienceGained} 경험치가 추가되었습니다!`
+        : '약속 인증이 승인되었습니다.'
+      : '약속 인증이 거절되었습니다.';
+
+    res.status(200).json({
+      success: true,
+      message,
+      data: result,
     });
-  }
-  
-  const { id } = req.params;
-  const { approved, rejectionReason } = req.body;
-  
-  const result = await promiseService.respondToVerification(id, req.user.id, approved, rejectionReason);
-  
-  // 응답 메시지에 경험치 획득 정보 포함
-  const message = approved 
-    ? result.experienceGained > 0
-      ? `약속 인증이 승인되었습니다. 아이의 식물에 ${result.experienceGained} 경험치가 추가되었습니다!`
-      : '약속 인증이 승인되었습니다.'
-    : '약속 인증이 거절되었습니다.';
-  
-  res.status(200).json({
-    success: true,
-    message,
-    data: result
-  });
-});
+  },
+);
 
 /**
  * 승인 대기 중인 약속 인증 목록 조회

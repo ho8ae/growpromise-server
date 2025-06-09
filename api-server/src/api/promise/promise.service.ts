@@ -109,6 +109,32 @@ export const createPromise = async (
 };
 
 /**
+ *  약속과 할당 정보를 함께 조회
+ */
+export const getPromiseWithAssignments = async (promiseId: string) => {
+  return await prisma.promiseTask.findUnique({
+    where: { id: promiseId },
+    include: {
+      assignments: {
+        include: {
+          child: {
+            include: {
+              user: {
+                select: {
+                  id: true,
+                  username: true,
+                }
+              }
+            }
+          }
+        }
+      }
+    }
+  });
+};
+
+
+/**
  * 약속 할당 생성 (내부 함수)
  */
 const createPromiseAssignments = async (
@@ -488,35 +514,61 @@ export const deletePromise = async (promiseId: string, userId: string) => {
   });
 };
 
+
+
 /**
- * 약속 인증 제출
+ * 약속 인증 제출 
  */
 export const submitVerification = async (
   promiseAssignmentId: string,
   userId: string,
   imagePath: string,
-  verificationDescription: string | null // 추가: 인증 설명 파라미터
+  verificationDescription: string | null
 ) => {
-  // 기존 코드...
+  const childProfileId = await getChildProfileId(userId);
 
-  // 약속 할당 업데이트
-  const updatedAssignment = await prisma.$transaction(async (prisma) => {
-    // 상태 업데이트
-    const updated = await prisma.promiseAssignment.update({
-      where: { id: promiseAssignmentId },
-      data: {
-        status: PromiseStatus.SUBMITTED,
-        verificationImage: imagePath,
-        verificationTime: new Date(),
-        verificationDescription: verificationDescription, // 추가: 인증 설명 저장
-      },
-    });
-
-    // 나머지 코드...
+  // 약속 할당 확인
+  const promiseAssignment = await prisma.promiseAssignment.findUnique({
+    where: { id: promiseAssignmentId },
+    include: {
+      promise: true,
+    },
   });
 
-  return updatedAssignment;
+  if (!promiseAssignment) {
+    throw new ApiError('약속 할당을 찾을 수 없습니다.', 404);
+  }
+
+  if (promiseAssignment.childId !== childProfileId) {
+    throw new ApiError('이 약속을 인증할 권한이 없습니다.', 403);
+  }
+
+  if (promiseAssignment.status !== PromiseStatus.PENDING) {
+    throw new ApiError('이미 인증이 제출된 약속입니다.', 400);
+  }
+
+  // 약속 할당 업데이트
+  const updatedAssignment = await prisma.promiseAssignment.update({
+    where: { id: promiseAssignmentId },
+    data: {
+      status: PromiseStatus.SUBMITTED,
+      verificationImage: imagePath,
+      verificationTime: new Date(),
+      verificationDescription: verificationDescription,
+    },
+    include: {
+      promise: true,
+    },
+  });
+
+  // promiseId를 포함한 객체 반환
+  return {
+    ...updatedAssignment,
+    promiseId: updatedAssignment.promise.id,
+  };
 };
+
+
 /**
  * 약속 인증 응답 (승인/거절) - 티켓 시스템 연동 버전
  */
@@ -900,4 +952,104 @@ export const getPromiseAssignmentsByChild = async (
       },
     },
   });
+};
+
+
+/**
+ * 약속의 부모 사용자 ID 조회 (알림용)
+ */
+export const getPromiseParentUserId = async (promiseId: string): Promise<string | null> => {
+  try {
+    const promise = await prisma.promiseTask.findUnique({
+      where: { id: promiseId },
+      include: {
+        parent: {
+          include: {
+            user: {
+              select: { id: true }
+            }
+          }
+        }
+      }
+    });
+
+    return promise?.parent.user.id || null;
+  } catch (error) {
+    console.error('부모 사용자 ID 조회 실패:', error);
+    return null;
+  }
+};
+
+/**
+ * 약속 할당의 자녀 사용자 ID 조회 (알림용)
+ */
+export const getPromiseAssignmentChildUserId = async (assignmentId: string): Promise<string | null> => {
+  try {
+    const assignment = await prisma.promiseAssignment.findUnique({
+      where: { id: assignmentId },
+      include: {
+        child: {
+          include: {
+            user: {
+              select: { id: true }
+            }
+          }
+        }
+      }
+    });
+
+    return assignment?.child.user.id || null;
+  } catch (error) {
+    console.error('자녀 사용자 ID 조회 실패:', error);
+    return null;
+  }
+};
+
+/**
+ * 약속 할당에서 부모-자녀 사용자 ID들 조회 (알림용)
+ */
+export const getPromiseAssignmentUserIds = async (assignmentId: string): Promise<{
+  parentUserId: string | null;
+  childUserId: string | null;
+  promiseTitle: string | null;
+}> => {
+  try {
+    const assignment = await prisma.promiseAssignment.findUnique({
+      where: { id: assignmentId },
+      include: {
+        promise: {
+          include: {
+            parent: {
+              include: {
+                user: { select: { id: true } }
+              }
+            }
+          },
+          select: {
+            id: true,
+            title: true,
+            parent: true
+          }
+        },
+        child: {
+          include: {
+            user: { select: { id: true } }
+          }
+        }
+      }
+    });
+
+    if (!assignment) {
+      return { parentUserId: null, childUserId: null, promiseTitle: null };
+    }
+
+    return {
+      parentUserId: assignment.promise.parent.userId,
+      childUserId: assignment.child.user.id,
+      promiseTitle: assignment.promise.title
+    };
+  } catch (error) {
+    console.error('약속 할당 사용자 ID들 조회 실패:', error);
+    return { parentUserId: null, childUserId: null, promiseTitle: null };
+  }
 };
