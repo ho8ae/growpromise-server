@@ -188,16 +188,16 @@ const createPromiseAssignments = async (
     });
   }
 
-  // 자녀에게 알림 생성
-  await prisma.notification.create({
-    data: {
-      userId: await getUserIdFromChildProfileId(prisma, childId),
-      title: '새로운 약속이 생성되었습니다',
-      content: `'${promise.title}' 약속이 부모님에 의해 생성되었습니다.`,
-      notificationType: 'PROMISE_CREATED',
-      relatedId: promise.id,
-    },
-  });
+  // 자녀에게 알림 생성 controller에서 할당
+  // await prisma.notification.create({
+  //   data: {
+  //     userId: await getUserIdFromChildProfileId(prisma, childId),
+  //     title: '새로운 약속이 생성되었습니다',
+  //     content: `'${promise.title}' 약속이 부모님에 의해 생성되었습니다.`,
+  //     notificationType: 'PROMISE_CREATED',
+  //     relatedId: promise.id,
+  //   },
+  // });
 };
 
 /**
@@ -629,18 +629,18 @@ export const respondToVerification = async (
       },
     });
 
-    // 자녀에게 알림 생성
-    await prisma.notification.create({
-      data: {
-        userId: promiseAssignment.child.user.id,
-        title: approved ? '약속 인증 성공' : '약속 인증 실패',
-        content: approved
-          ? `${promiseAssignment.promise.title} 약속 인증이 승인되었습니다. 축하합니다!`
-          : `${promiseAssignment.promise.title} 약속 인증이 거절되었습니다. 사유: ${rejectionReason}`,
-        notificationType: approved ? 'PROMISE_APPROVED' : 'PROMISE_REJECTED',
-        relatedId: promiseAssignmentId,
-      },
-    });
+    // 자녀에게 알림 생성 controller에서 담당
+    // await prisma.notification.create({
+    //   data: {
+    //     userId: promiseAssignment.child.user.id,
+    //     title: approved ? '약속 인증 성공' : '약속 인증 실패',
+    //     content: approved
+    //       ? `${promiseAssignment.promise.title} 약속 인증이 승인되었습니다. 축하합니다!`
+    //       : `${promiseAssignment.promise.title} 약속 인증이 거절되었습니다. 사유: ${rejectionReason}`,
+    //     notificationType: approved ? 'PROMISE_APPROVED' : 'PROMISE_REJECTED',
+    //     relatedId: promiseAssignmentId,
+    //   },
+    // });
 
     // 승인된 경우 스티커 부여 및 식물 경험치 추가
     if (approved) {

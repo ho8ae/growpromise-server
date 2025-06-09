@@ -33,7 +33,7 @@ export const createPromise = asyncHandler(
       endDateObj,
       childIds,
     );
-    // 🔥 자녀들에게 알림 전송
+    // 자녀들에게 알림 전송
 
     try {
       // 생성된 약속의 할당 정보를 다시 조회
