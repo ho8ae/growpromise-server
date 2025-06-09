@@ -18,9 +18,9 @@ router.get('/', validate(getNotificationsSchema, 'query'), notificationControlle
 router.get('/:id', notificationController.getNotificationById);
 
 // 알림 읽음 상태 업데이트 라우트
-router.patch('/:id/read', validate(updateNotificationReadStatusSchema), notificationController.updateNotificationReadStatus);
-router.patch('/batch/read', validate(updateMultipleNotificationsSchema), notificationController.updateMultipleNotificationsReadStatus);
-router.patch('/all/read', notificationController.markAllNotificationsAsRead);
+router.put('/:id/read', validate(updateNotificationReadStatusSchema), notificationController.updateNotificationReadStatus);
+router.put('/batch/read', validate(updateMultipleNotificationsSchema), notificationController.updateMultipleNotificationsReadStatus);
+router.put('/all/read', notificationController.markAllNotificationsAsRead);
 
 // 알림 삭제 라우트
 router.delete('/:id', notificationController.deleteNotification);
