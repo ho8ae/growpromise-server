@@ -16,8 +16,13 @@ model User {
   profileImage  String?
   createdAt     DateTime  @default(now())
   updatedAt     DateTime  @updatedAt
-  passwordResetToken    String?   // 추가: 비밀번호 재설정 토큰
-  passwordResetExpires  DateTime? // 추가: 비밀번호 재설정 토큰 만료 시간
+  passwordResetToken    String?   
+  passwordResetExpires  DateTime? 
+
+ // 푸시 알림용 필드
+  expoPushToken         String?   // Expo 푸시 토큰
+  pushTokenUpdatedAt    DateTime? // 푸시 토큰 업데이트 시간
+  notificationEnabled   Boolean   @default(true) // 알림 수신 여부
   
  // 소셜 로그인 관련 필드 추가
   socialProvider    SocialProvider? // GOOGLE, APPLE, null(일반 로그인)
