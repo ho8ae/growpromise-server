@@ -266,7 +266,7 @@ export const getUserAccountStatus = asyncHandler(async (req: Request, res: Respo
 
 
 /**
- * 푸시 토큰 저장/업데이트
+ * 푸시 토큰 저장/업데이트 (플랫폼별 지원)
  * @route POST /api/users/push-token
  */
 export const updatePushToken = asyncHandler(async (req: Request, res: Response) => {
@@ -277,30 +277,53 @@ export const updatePushToken = asyncHandler(async (req: Request, res: Response) 
     });
   }
 
-  const { expoPushToken } = req.body;
+  const { expoPushToken, fcmToken, platform } = req.body;
 
-  if (!expoPushToken) {
+  // 플랫폼별 토큰 유효성 검사
+  if (!platform || !['ios', 'android'].includes(platform)) {
     return res.status(400).json({
       success: false,
-      message: '푸시 토큰이 필요합니다.'
+      message: '플랫폼 정보가 필요합니다. (ios 또는 android)'
+    });
+  }
+
+  if (platform === 'ios' && !expoPushToken) {
+    return res.status(400).json({
+      success: false,
+      message: 'iOS에서는 Expo 푸시 토큰이 필요합니다.'
+    });
+  }
+
+  if (platform === 'android' && !fcmToken && !expoPushToken) {
+    return res.status(400).json({
+      success: false,
+      message: 'Android에서는 FCM 토큰 또는 Expo 토큰이 필요합니다.'
     });
   }
 
   try {
-    await pushNotificationService.saveUserPushToken(req.user.id, expoPushToken);
+    // 플랫폼별 토큰 저장
+    if (platform === 'ios' && expoPushToken) {
+      await pushNotificationService.saveUserPushToken(req.user.id, expoPushToken, 'ios');
+    } else if (platform === 'android') {
+      // Android는 FCM 토큰 우선, 없으면 Expo 토큰 사용
+      const token = fcmToken || expoPushToken;
+      await pushNotificationService.saveUserPushToken(req.user.id, token, 'android');
+    }
 
     res.status(200).json({
       success: true,
-      message: '푸시 토큰이 성공적으로 저장되었습니다.'
+      message: `${platform.toUpperCase()} 푸시 토큰이 성공적으로 저장되었습니다.`
     });
   } catch (error) {
     console.error('푸시 토큰 저장 오류:', error);
     res.status(400).json({
       success: false,
-      message: '유효하지 않은 푸시 토큰입니다.'
+      message: error instanceof Error ? error.message : '푸시 토큰 저장에 실패했습니다.'
     });
   }
 });
+
 
 /**
  * 알림 설정 업데이트
@@ -373,7 +396,7 @@ export const sendTestPushNotification = asyncHandler(async (req: Request, res: R
 });
 
 /**
- * 사용자 알림 설정 조회
+ * 사용자 알림 설정 조회 (플랫폼별 토큰 정보 포함)
  * @route GET /api/users/notification-settings
  */
 export const getNotificationSettings = asyncHandler(async (req: Request, res: Response) => {
@@ -389,6 +412,8 @@ export const getNotificationSettings = asyncHandler(async (req: Request, res: Re
       where: { id: req.user.id },
       select: {
         expoPushToken: true,
+        fcmToken: true,
+        platform: true,
         notificationEnabled: true,
         pushTokenUpdatedAt: true
       }
@@ -404,7 +429,10 @@ export const getNotificationSettings = asyncHandler(async (req: Request, res: Re
     res.status(200).json({
       success: true,
       data: {
-        hasToken: !!user.expoPushToken,
+        hasToken: !!(user.expoPushToken || user.fcmToken),
+        hasExpoToken: !!user.expoPushToken,
+        hasFcmToken: !!user.fcmToken,
+        platform: user.platform,
         isEnabled: user.notificationEnabled,
         lastUpdated: user.pushTokenUpdatedAt
       }
@@ -414,6 +442,45 @@ export const getNotificationSettings = asyncHandler(async (req: Request, res: Re
     res.status(500).json({
       success: false,
       message: '알림 설정 조회에 실패했습니다.'
+    });
+  }
+});
+
+
+/**
+ * 레거시 푸시 토큰 업데이트 (하위 호환성)
+ * @route POST /api/users/push-token/legacy
+ */
+export const updatePushTokenLegacy = asyncHandler(async (req: Request, res: Response) => {
+  if (!req.user) {
+    return res.status(401).json({
+      success: false,
+      message: '인증이 필요합니다.'
+    });
+  }
+
+  const { expoPushToken } = req.body;
+
+  if (!expoPushToken) {
+    return res.status(400).json({
+      success: false,
+      message: '푸시 토큰이 필요합니다.'
+    });
+  }
+
+  try {
+    // 레거시 호환성을 위해 iOS로 가정
+    await pushNotificationService.saveUserPushToken(req.user.id, expoPushToken, 'ios');
+
+    res.status(200).json({
+      success: true,
+      message: '푸시 토큰이 성공적으로 저장되었습니다.'
+    });
+  } catch (error) {
+    console.error('레거시 푸시 토큰 저장 오류:', error);
+    res.status(400).json({
+      success: false,
+      message: '유효하지 않은 푸시 토큰입니다.'
     });
   }
 });

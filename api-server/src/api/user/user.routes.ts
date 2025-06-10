@@ -8,7 +8,8 @@ import {
   updateDetailProfileSchema,
   selectAvatarSchema,
   updatePushTokenSchema,
-  updateNotificationSettingsSchema
+  updateNotificationSettingsSchema,
+  updatePushTokenLegacySchema
 } from './user.validation';
 
 const router = express.Router();
@@ -36,6 +37,7 @@ router.post('/push-token', validate(updatePushTokenSchema), userController.updat
 router.get('/notification-settings', userController.getNotificationSettings);
 router.put('/notification-settings', validate(updateNotificationSettingsSchema), userController.updateNotificationSettings);
 router.post('/test-push', userController.sendTestPushNotification);
+router.post('/push-token/legacy', validate(updatePushTokenLegacySchema), userController.updatePushTokenLegacy);
 
 // 관계 라우트  
 router.get('/children', userController.getParentChildren);
