@@ -13,6 +13,7 @@ yarn.lock
 .env.test
 .env.production
 .env*.local
+firebase-service-account.json
 
 # Prisma 관련 파일
 /prisma/migrations/
