@@ -601,3 +601,28 @@ export const resetChildPasswordTemporary = asyncHandler(async (req: Request, res
     }
   });
 });
+
+/**
+ * 아이디 중복 확인 (일반 로그인만)
+ * @route POST /api/auth/check-username
+ */
+export const checkUsername = asyncHandler(async (req: Request, res: Response) => {
+  const { username } = req.body;
+  
+  if (!username) {
+    return res.status(400).json({
+      success: false,
+      message: '아이디는 필수입니다.'
+    });
+  }
+
+  const isAvailable = await authService.checkUsernameAvailability(username);
+  
+  res.status(200).json({
+    success: true,
+    available: isAvailable,
+    message: isAvailable ? 
+      '사용 가능한 아이디입니다.' : 
+      '이미 사용 중인 아이디입니다.'
+  });
+});

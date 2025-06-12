@@ -495,6 +495,12 @@ export const createParentAccount = async (
   email: string,
   password: string,
 ) => {
+  // 아이디 중복 확인
+  const isUsernameAvailable = await checkUsernameAvailability(username);
+  if (!isUsernameAvailable) {
+    throw new ApiError('이미 사용 중인 아이디입니다.', 400);
+  }
+
   // 이메일 중복 확인
   const existingUser = await prisma.user.findUnique({
     where: { email },
@@ -566,6 +572,12 @@ export const createChildAccount = async (
   birthDate?: Date,
   parentCode?: string,
 ) => {
+  // 일반 로그인 사용자 중 username 중복 확인
+  const isUsernameAvailable = await checkUsernameAvailability(username);
+  if (!isUsernameAvailable) {
+    throw new ApiError('이미 사용 중인 아이디입니다.', 400);
+  }
+
   // 비밀번호 해싱
   const hashedPassword = await hashPassword(password);
 
@@ -634,10 +646,12 @@ export const loginUser = async (
   password: string,
   // userType: 'PARENT' | 'CHILD'
 ) => {
-  // 사용자 찾기
+  // 사용자 찾기 (일반 로그인 만 확인)
   const user = await prisma.user.findFirst({
     where: {
       username,
+      socialProvider: null, // 일반 로그인만!
+      isActive: true,
     },
   });
 
@@ -1140,4 +1154,21 @@ export const resetChildPasswordWithTemporary = async (
     temporaryPassword,
     message: `${result.childUsername}님의 임시 비밀번호가 생성되었습니다. 로그인 후 비밀번호를 변경해주세요.`,
   };
+};
+
+/**
+ * 일반 로그인 사용자 중 username 중복 확인
+ */
+export const checkUsernameAvailability = async (
+  username: string,
+): Promise<boolean> => {
+  const existingUser = await prisma.user.findFirst({
+    where: {
+      username,
+      socialProvider: null, // 🔥 일반 로그인만 확인
+      isActive: true,
+    },
+  });
+
+  return !existingUser; // true면 사용 가능
 };

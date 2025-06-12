@@ -16,7 +16,8 @@ import {
   setSocialPasswordSchema,
   deleteAccountSchema,
   resetChildPasswordSchema,
-  requestChildPasswordResetSchema
+  requestChildPasswordResetSchema,
+  checkUsernameSchema
 } from './auth.validation';
 
 const router = express.Router();
@@ -27,6 +28,7 @@ router.get('/parent/connection-code', authenticate, requireParent, authControlle
 router.post('/parent/signup', validate(parentSignupSchema), authController.parentSignup);
 router.post('/parent/reset-child-password', authenticate, requireParent, validate(resetChildPasswordSchema), authController.resetChildPassword);
 router.post('/parent/reset-child-password-temporary', authenticate, requireParent, validate(requestChildPasswordResetSchema), authController.resetChildPasswordTemporary);
+router.post('/check-username', validate(checkUsernameSchema), authController.checkUsername);
 
 //  2. 자녀 관련 라우트
 router.post('/child/signup', validate(childSignupSchema), authController.childSignup);

@@ -201,3 +201,14 @@ export const resetChildPasswordSchema = Joi.object({
     'any.required': '비밀번호 확인은 필수입니다.'
   })
 });
+
+
+
+export const checkUsernameSchema = Joi.object({
+  username: Joi.string().required().min(2).max(30).messages({
+    'string.empty': '아이디는 필수입니다.',
+    'string.min': '아이디는 최소 2자 이상이어야 합니다.',
+    'string.max': '아이디는 최대 30자까지 가능합니다.',
+    'any.required': '아이디는 필수입니다.'
+  })
+});
